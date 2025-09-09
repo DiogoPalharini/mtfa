@@ -3,6 +3,8 @@
     "name": "mtfa",
     "slug": "mtfa",
     "version": "1.0.0",
+    "scheme": "mtfa",
+    "plugins": ["expo-router"],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
