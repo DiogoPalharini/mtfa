@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platfo
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
+import { useLanguage } from '../contexts/LanguageContext';
+import { createI18n } from '../i18n/create';
 
 const PRIMARY = '#0052CC';
 const BG = '#F8F9FA';
@@ -39,6 +41,9 @@ const MOCK_DATA = {
 };
 
 export default function CreateTripScreen() {
+  const { language } = useLanguage();
+  const t = createI18n[language];
+  
   const now = useMemo(() => new Date(), []);
   const [formData, setFormData] = useState<FormData>({
     date: now.toLocaleDateString('pt-BR'),
@@ -75,7 +80,7 @@ export default function CreateTripScreen() {
   const minuteRef = useRef<ScrollView | null>(null);
   const secondRef = useRef<ScrollView | null>(null);
 
-  const scrollToCenter = (ref: React.RefObject<ScrollView>, index: number, listLength: number) => {
+  const scrollToCenter = (ref: React.RefObject<ScrollView | null>, index: number, listLength: number) => {
     const visibleCount = 5; // aproximadamente
     const offset = Math.max(0, index * ROW_HEIGHT - ((visibleCount - 1) / 2) * ROW_HEIGHT);
     ref.current?.scrollTo({ y: offset, animated: false });
@@ -161,7 +166,14 @@ export default function CreateTripScreen() {
             <View style={styles.dropdownContent}>
               <Ionicons name={icon} size={20} color={TEXT_SECONDARY} />
               <Text style={[styles.dropdownText, !value && styles.placeholderText]}>
-                {value || `Selecione ${label.toLowerCase()}`}
+                {value || (field === 'truck' ? t.selectTruck :
+                  field === 'company' ? t.selectCompany :
+                  field === 'field' ? t.selectField :
+                  field === 'variety' ? t.selectVariety :
+                  field === 'driver' ? t.selectDriver :
+                  field === 'deliveryLocation' ? t.selectDeliveryLocation :
+                  field === 'contract' ? t.selectContract :
+                  `Selecione ${label.toLowerCase()}`)}
               </Text>
             </View>
             <Ionicons
@@ -176,7 +188,7 @@ export default function CreateTripScreen() {
           <View style={styles.dropdownOverlay}>
             <View style={styles.dropdownOptions}>
               <View style={styles.dropdownHeader}>
-                <Text style={styles.dropdownHeaderText}>Selecione uma opção</Text>
+                <Text style={styles.dropdownHeaderText}>{t.selectOption}</Text>
                 <TouchableOpacity onPress={closeAllDropdowns} style={styles.cancelButton}>
                   <Ionicons name="close" size={20} color={TEXT_SECONDARY} />
                 </TouchableOpacity>
@@ -238,32 +250,32 @@ export default function CreateTripScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Campos de entrada */}
-        {renderDateTimeField('Data', formData.date, 'date', 'calendar', 'DD/MM/AAAA')}
-        {renderDateTimeField('Hora', formData.time, 'time', 'time', 'HH:MM:SS')}
+        {renderDateTimeField(t.date, formData.date, 'date', 'calendar', t.datePlaceholder)}
+        {renderDateTimeField(t.time, formData.time, 'time', 'time', t.timePlaceholder)}
         
-        {renderDropdown('Caminhão', formData.truck, MOCK_DATA.trucks, 'truck', 'car')}
-        {renderDropdown('Empresa', formData.company, MOCK_DATA.companies, 'company', 'business')}
-        {renderDropdown('Campo', formData.field, MOCK_DATA.fields, 'field', 'leaf')}
-        {renderDropdown('Tipo/Variedade', formData.variety, MOCK_DATA.varieties, 'variety', 'nutrition')}
-        {renderDropdown('Motorista', formData.driver, MOCK_DATA.drivers, 'driver', 'person')}
-        {renderDropdown('Local de Entrega', formData.deliveryLocation, MOCK_DATA.deliveryLocations, 'deliveryLocation', 'location')}
-        {renderDropdown('Contrato', formData.contract, MOCK_DATA.contracts, 'contract', 'document-text')}
+        {renderDropdown(t.truck, formData.truck, MOCK_DATA.trucks, 'truck', 'car')}
+        {renderDropdown(t.company, formData.company, MOCK_DATA.companies, 'company', 'business')}
+        {renderDropdown(t.field, formData.field, MOCK_DATA.fields, 'field', 'leaf')}
+        {renderDropdown(t.variety, formData.variety, MOCK_DATA.varieties, 'variety', 'nutrition')}
+        {renderDropdown(t.driver, formData.driver, MOCK_DATA.drivers, 'driver', 'person')}
+        {renderDropdown(t.deliveryLocation, formData.deliveryLocation, MOCK_DATA.deliveryLocations, 'deliveryLocation', 'location')}
+        {renderDropdown(t.contract, formData.contract, MOCK_DATA.contracts, 'contract', 'document-text')}
 
         {/* Campo de texto para Guia de Remessa */}
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Guia de Remessa</Text>
+          <Text style={styles.inputLabel}>{t.shippingGuide}</Text>
           <TextInput
             style={styles.textInput}
             value={formData.shippingGuide}
             onChangeText={(text) => setFormData(prev => ({ ...prev, shippingGuide: text }))}
-            placeholder="Digite o número da guia"
+            placeholder={t.shippingGuidePlaceholder}
             placeholderTextColor={TEXT_SECONDARY}
           />
         </View>
 
         {/* Botão Salvar */}
         <TouchableOpacity style={styles.saveButton} onPress={() => { closeAllDropdowns(); }} activeOpacity={0.8}>
-          <Text style={styles.saveButtonText}>Salvar</Text>
+          <Text style={styles.saveButtonText}>{t.save}</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -272,14 +284,14 @@ export default function CreateTripScreen() {
         <View style={styles.backdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecionar Data</Text>
+              <Text style={styles.modalTitle}>{t.selectDate}</Text>
               <TouchableOpacity onPress={() => setDateModalVisible(false)}>
                 <Ionicons name="close" size={22} color={TEXT} />
               </TouchableOpacity>
             </View>
             <View style={styles.modalContentRow}>
               <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>Dia</Text>
+                <Text style={styles.modalLabel}>{t.day}</Text>
                 <ScrollView ref={dayRef} style={styles.modalList} showsVerticalScrollIndicator>
                   {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
                     <TouchableOpacity key={d} style={[styles.modalOption, selectedDay === d && styles.modalOptionActive]} onPress={() => setSelectedDay(d)}>
@@ -289,7 +301,7 @@ export default function CreateTripScreen() {
                 </ScrollView>
               </View>
               <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>Mês</Text>
+                <Text style={styles.modalLabel}>{t.month}</Text>
                 <ScrollView ref={monthRef} style={styles.modalList} showsVerticalScrollIndicator>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                     <TouchableOpacity key={m} style={[styles.modalOption, selectedMonth === m && styles.modalOptionActive]} onPress={() => setSelectedMonth(m)}>
@@ -299,7 +311,7 @@ export default function CreateTripScreen() {
                 </ScrollView>
               </View>
               <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>Ano</Text>
+                <Text style={styles.modalLabel}>{t.year}</Text>
                 <ScrollView ref={yearRef} style={styles.modalList} showsVerticalScrollIndicator>
                   {Array.from({ length: 7 }, (_, i) => now.getFullYear() - 3 + i).map(y => (
                     <TouchableOpacity key={y} style={[styles.modalOption, selectedYear === y && styles.modalOptionActive]} onPress={() => setSelectedYear(y)}>
@@ -311,10 +323,10 @@ export default function CreateTripScreen() {
             </View>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity style={styles.secondaryButton} onPress={useNowDate}>
-                <Text style={styles.secondaryButtonText}>Usar Agora</Text>
+                <Text style={styles.secondaryButtonText}>{t.useNow}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.primaryButton} onPress={applyDate}>
-                <Text style={styles.primaryButtonText}>Aplicar</Text>
+                <Text style={styles.primaryButtonText}>{t.apply}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -326,14 +338,14 @@ export default function CreateTripScreen() {
         <View style={styles.backdrop}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Selecionar Hora</Text>
+              <Text style={styles.modalTitle}>{t.selectTime}</Text>
               <TouchableOpacity onPress={() => setTimeModalVisible(false)}>
                 <Ionicons name="close" size={22} color={TEXT} />
               </TouchableOpacity>
             </View>
             <View style={styles.modalContentRow}>
               <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>Hora</Text>
+                <Text style={styles.modalLabel}>{t.hour}</Text>
                 <ScrollView ref={hourRef} style={styles.modalList} showsVerticalScrollIndicator>
                   {Array.from({ length: 24 }, (_, i) => i).map(h => (
                     <TouchableOpacity key={h} style={[styles.modalOption, selectedHour === h && styles.modalOptionActive]} onPress={() => setSelectedHour(h)}>
@@ -343,7 +355,7 @@ export default function CreateTripScreen() {
                 </ScrollView>
               </View>
               <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>Minuto</Text>
+                <Text style={styles.modalLabel}>{t.minute}</Text>
                 <ScrollView ref={minuteRef} style={styles.modalList} showsVerticalScrollIndicator>
                   {Array.from({ length: 60 }, (_, i) => i).map(m => (
                     <TouchableOpacity key={m} style={[styles.modalOption, selectedMinute === m && styles.modalOptionActive]} onPress={() => setSelectedMinute(m)}>
@@ -353,7 +365,7 @@ export default function CreateTripScreen() {
                 </ScrollView>
               </View>
               <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>Segundo</Text>
+                <Text style={styles.modalLabel}>{t.second}</Text>
                 <ScrollView ref={secondRef} style={styles.modalList} showsVerticalScrollIndicator>
                   {Array.from({ length: 60 }, (_, i) => i).map(s => (
                     <TouchableOpacity key={s} style={[styles.modalOption, selectedSecond === s && styles.modalOptionActive]} onPress={() => setSelectedSecond(s)}>
@@ -365,10 +377,10 @@ export default function CreateTripScreen() {
             </View>
             <View style={styles.modalButtonsRow}>
               <TouchableOpacity style={styles.secondaryButton} onPress={useNowTime}>
-                <Text style={styles.secondaryButtonText}>Usar Agora</Text>
+                <Text style={styles.secondaryButtonText}>{t.useNow}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.primaryButton} onPress={applyTime}>
-                <Text style={styles.primaryButtonText}>Aplicar</Text>
+                <Text style={styles.primaryButtonText}>{t.apply}</Text>
               </TouchableOpacity>
             </View>
           </View>

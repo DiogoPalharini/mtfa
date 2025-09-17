@@ -1,0 +1,43 @@
+import type { LanguageCode } from '../contexts/LanguageContext';
+
+export const commonI18n: Record<LanguageCode, Record<string, string>> = {
+  pt: {
+    notFound: 'Página não encontrada',
+    notFoundDescription: 'A página que você está procurando não existe ou foi movida.',
+    backToLogin: 'Voltar ao Login',
+    cancel: 'Cancelar',
+    close: 'Fechar',
+    confirm: 'Confirmar',
+    loading: 'Carregando...',
+    error: 'Erro',
+    success: 'Sucesso',
+    warning: 'Aviso',
+    info: 'Informação',
+  },
+  en: {
+    notFound: 'Page not found',
+    notFoundDescription: 'The page you are looking for does not exist or has been moved.',
+    backToLogin: 'Back to Login',
+    cancel: 'Cancel',
+    close: 'Close',
+    confirm: 'Confirm',
+    loading: 'Loading...',
+    error: 'Error',
+    success: 'Success',
+    warning: 'Warning',
+    info: 'Information',
+  },
+  de: {
+    notFound: 'Seite nicht gefunden',
+    notFoundDescription: 'Die gesuchte Seite existiert nicht oder wurde verschoben.',
+    backToLogin: 'Zurück zur Anmeldung',
+    cancel: 'Abbrechen',
+    close: 'Schließen',
+    confirm: 'Bestätigen',
+    loading: 'Laden...',
+    error: 'Fehler',
+    success: 'Erfolg',
+    warning: 'Warnung',
+    info: 'Information',
+  },
+};

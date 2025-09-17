@@ -46,7 +46,12 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <AppHeader projectName="MTFA" />
+      <AppHeader 
+        projectName="MTFA" 
+        showSync={true}
+        isSyncing={isSyncing}
+        onSyncPress={handleSyncNow}
+      />
 
       <View style={styles.content}>
         <Text style={styles.welcome}>{t.welcome}</Text>
@@ -57,15 +62,6 @@ export default function HomeScreen() {
             <Ionicons name={pending === 0 ? 'checkmark-circle' : 'alert-circle'} size={22} color={syncColor} />
           </View>
           <Text style={[styles.syncMessage, { color: syncColor }]}>{syncText}</Text>
-          <TouchableOpacity
-            style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]}
-            onPress={handleSyncNow}
-            disabled={isSyncing}
-            activeOpacity={0.85}
-          >
-            <Ionicons name={isSyncing ? 'sync' : 'cloud-upload-outline'} size={18} color="#FFF" />
-            <Text style={styles.syncButtonText}>{isSyncing ? t.syncing : t.syncNow}</Text>
-          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
@@ -115,9 +111,6 @@ const styles = StyleSheet.create({
   syncCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   syncCardTitle: { color: TEXT, fontSize: 16, fontWeight: 'bold' },
   syncMessage: { fontSize: 14, marginBottom: 12 },
-  syncButton: { backgroundColor: PRIMARY, borderRadius: 12, height: 48, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 },
-  syncButtonDisabled: { opacity: 0.7 },
-  syncButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginLeft: 8 },
   sectionTitle: { color: TEXT, fontSize: 16, fontWeight: 'bold', marginBottom: 12, marginTop: 8 },
   createButton: { backgroundColor: PRIMARY, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16, ...CARD_SHADOW },
   createButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },

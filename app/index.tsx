@@ -3,6 +3,8 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, Dimensions, Keyboa
 import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useLanguage } from '../contexts/LanguageContext';
+import { loginI18n } from '../i18n/login';
 
 const { width } = Dimensions.get('window');
 
@@ -12,6 +14,9 @@ interface LoginFormData {
 }
 
 export default function LoginScreen() {
+  const { language } = useLanguage();
+  const t = loginI18n[language];
+  
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
@@ -84,8 +89,7 @@ export default function LoginScreen() {
         <View style={styles.loginCard}>
           {/* Logo/Título */}
           <View style={styles.logoContainer}>
-            <Text style={styles.appTitle}>MTFA</Text>
-            <Text style={styles.appSubtitle}>Multi-Factor Authentication</Text>
+            <Text style={styles.appTitle}>{t.appTitle}</Text>
           </View>
 
           {/* Formulário */}
@@ -95,7 +99,7 @@ export default function LoginScreen() {
               <Controller
                 control={control}
                 name="username"
-                rules={{ required: 'Usuário ou email é obrigatório' }}
+                rules={{ required: t.usernameRequired }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Animated.View style={[
                     styles.inputWrapper,
@@ -114,7 +118,7 @@ export default function LoginScreen() {
                         styles.input,
                         errors.username && styles.inputError
                       ]}
-                      placeholder="Usuário ou Email"
+                      placeholder={t.usernamePlaceholder}
                       placeholderTextColor="#6C757D"
                       value={value}
                       onChangeText={onChange}
@@ -140,7 +144,7 @@ export default function LoginScreen() {
               <Controller
                 control={control}
                 name="password"
-                rules={{ required: 'Senha é obrigatória' }}
+                rules={{ required: t.passwordRequired }}
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Animated.View style={[
                     styles.inputWrapper,
@@ -160,7 +164,7 @@ export default function LoginScreen() {
                           styles.passwordInput,
                           errors.password && styles.inputError
                         ]}
-                        placeholder="Senha"
+                        placeholder={t.passwordPlaceholder}
                         placeholderTextColor="#6C757D"
                         value={value}
                         onChangeText={onChange}
@@ -204,15 +208,12 @@ export default function LoginScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={styles.loginButtonText}>
-                  {isLoading ? 'Entrando...' : 'Entrar'}
+                  {isLoading ? t.loggingIn : t.loginButton}
                 </Text>
               </TouchableOpacity>
             </Animated.View>
 
-            {/* Link Esqueceu a Senha */}
-            <TouchableOpacity style={styles.forgotPasswordLink} activeOpacity={0.7}>
-              <Text style={styles.forgotPasswordText}>Esqueceu a Senha?</Text>
-            </TouchableOpacity>
+            
           </View>
         </View>
       </ScrollView>

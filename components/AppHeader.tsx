@@ -14,9 +14,18 @@ const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight 
 interface AppHeaderProps {
   projectName?: string;
   showBack?: boolean;
+  showSync?: boolean;
+  isSyncing?: boolean;
+  onSyncPress?: () => void;
 }
 
-export default function AppHeader({ projectName = 'MTFA', showBack = false }: AppHeaderProps) {
+export default function AppHeader({ 
+  projectName = 'MTFA', 
+  showBack = false, 
+  showSync = false, 
+  isSyncing = false, 
+  onSyncPress 
+}: AppHeaderProps) {
   const { language, setLanguage } = useLanguage();
   const [openLangMenu, setOpenLangMenu] = useState(false);
 
@@ -52,24 +61,41 @@ export default function AppHeader({ projectName = 'MTFA', showBack = false }: Ap
         <Text style={styles.title}>{projectName}</Text>
 
         <View style={styles.right}>
-          <View style={{ position: 'relative' }}>
-            <TouchableOpacity activeOpacity={0.8} onPress={() => setOpenLangMenu((v) => !v)}>
-              <Ionicons name="globe-outline" size={24} color={TEXT_ON_PRIMARY} />
-            </TouchableOpacity>
-
-            {openLangMenu && (
-              <View style={styles.langMenu}>
-                <TouchableOpacity style={styles.langItem} onPress={() => handleChangeLanguage('pt')}>
-                  <Text style={styles.langText}>Português</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.langItem} onPress={() => handleChangeLanguage('en')}>
-                  <Text style={styles.langText}>English</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.langItem} onPress={() => handleChangeLanguage('de')}>
-                  <Text style={styles.langText}>Deutsch</Text>
-                </TouchableOpacity>
-              </View>
+          <View style={styles.rightButtons}>
+            {showSync && (
+              <TouchableOpacity 
+                style={styles.syncButton} 
+                onPress={onSyncPress}
+                disabled={isSyncing}
+                activeOpacity={0.8}
+              >
+                <Ionicons 
+                  name={isSyncing ? "sync" : "cloud-upload-outline"} 
+                  size={24} 
+                  color={TEXT_ON_PRIMARY} 
+                />
+              </TouchableOpacity>
             )}
+            
+            <View style={{ position: 'relative' }}>
+              <TouchableOpacity activeOpacity={0.8} onPress={() => setOpenLangMenu((v) => !v)}>
+                <Ionicons name="globe-outline" size={24} color={TEXT_ON_PRIMARY} />
+              </TouchableOpacity>
+
+              {openLangMenu && (
+                <View style={styles.langMenu}>
+                  <TouchableOpacity style={styles.langItem} onPress={() => handleChangeLanguage('pt')}>
+                    <Text style={styles.langText}>Português</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.langItem} onPress={() => handleChangeLanguage('en')}>
+                    <Text style={styles.langText}>English</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.langItem} onPress={() => handleChangeLanguage('de')}>
+                    <Text style={styles.langText}>Deutsch</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
         </View>
       </View>
@@ -97,8 +123,16 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   right: {
-    width: 40,
     alignItems: 'flex-end',
+  },
+  rightButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  syncButton: {
+    padding: 4,
+    opacity: 1,
   },
   title: {
     color: TEXT_ON_PRIMARY,

@@ -1,24 +1,29 @@
 import { Link, Stack } from 'expo-router';
 import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../contexts/LanguageContext';
+import { commonI18n } from '../i18n/common';
 
 export default function NotFoundScreen() {
+  const { language } = useLanguage();
+  const t = commonI18n[language];
+  
   return (
     <>
       <Stack.Screen options={{ title: 'Oops!' }} />
       <View style={styles.container}>
         <View style={styles.content}>
           <Ionicons name="alert-circle" size={64} color="#DC3545" />
-          <Text style={styles.title}>Página não encontrada</Text>
+          <Text style={styles.title}>{t.notFound}</Text>
           <Text style={styles.subtitle}>
-            A página que você está procurando não existe ou foi movida.
+            {t.notFoundDescription}
           </Text>
         </View>
         
         <Link href="/" asChild>
           <TouchableOpacity style={styles.button}>
             <Ionicons name="home" size={24} color="#FFFFFF" />
-            <Text style={styles.buttonText}>Voltar ao Login</Text>
+            <Text style={styles.buttonText}>{t.backToLogin}</Text>
           </TouchableOpacity>
         </Link>
       </View>
