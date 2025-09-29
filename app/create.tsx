@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import { useLanguage } from '../contexts/LanguageContext';
 import { createI18n } from '../i18n/create';
+import { commonI18n } from '../i18n/common';
 
 const PRIMARY = '#0052CC';
 const BG = '#F8F9FA';
@@ -19,50 +20,74 @@ const ROW_HEIGHT = 44;
 interface FormData {
   date: string;
   time: string;
-  truck: string;
   company: string;
   field: string;
   variety: string;
+  truck: string;
   driver: string;
   deliveryLocation: string;
-  shippingGuide: string;
-  contract: string;
+  pesoEstimado: string;
+  precoFrete: string;
+  anotacoes: string;
 }
 
-// Dados mockados para os dropdowns
-const MOCK_DATA = {
-  trucks: ['Caminhão 001', 'Caminhão 002', 'Caminhão 003', 'Caminhão 004', 'Caminhão 005', 'Caminhão 006'],
-  companies: ['Empresa A', 'Empresa B', 'Empresa C', 'Empresa D', 'Empresa E'],
-  fields: ['Campo Norte', 'Campo Sul', 'Campo Leste', 'Campo Oeste', 'Campo Central'],
-  varieties: ['Soja', 'Milho', 'Trigo', 'Arroz', 'Algodão'],
-  drivers: ['João Silva', 'Maria Santos', 'Pedro Costa', 'Ana Souza', 'Carlos Lima'],
-  deliveryLocations: ['Porto Santos', 'Silo Central', 'Fábrica ABC', 'Terminal XYZ', 'Armazém 12'],
-  contracts: ['Contrato 2024-001', 'Contrato 2024-002', 'Contrato 2024-003', 'Contrato 2024-004'],
+// Interface para os dados dos dropdowns
+interface DropdownData {
+  trucks: string[];
+  companies: string[];
+  fields: string[];
+  varieties: string[];
+  drivers: string[];
+  deliveryLocations: string[];
+}
+
+// Função para simular carregamento dinâmico do banco
+const fetchDropdownData = async (): Promise<DropdownData> => {
+  // Simula delay de rede
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  return {
+    trucks: ['Caminhão 001', 'Caminhão 002', 'Caminhão 003', 'Caminhão 004', 'Caminhão 005', 'Caminhão 006'],
+    companies: ['Empresa A', 'Empresa B', 'Empresa C', 'Empresa D', 'Empresa E'],
+    fields: ['Campo Norte', 'Campo Sul', 'Campo Leste', 'Campo Oeste', 'Campo Central'],
+    varieties: ['Soja', 'Milho', 'Trigo', 'Arroz', 'Algodão'],
+    drivers: ['João Silva', 'Maria Santos', 'Pedro Costa', 'Ana Souza', 'Carlos Lima'],
+    deliveryLocations: ['Porto Santos', 'Silo Central', 'Fábrica ABC', 'Terminal XYZ', 'Armazém 12'],
+  };
 };
 
 export default function CreateTripScreen() {
   const { language } = useLanguage();
   const t = createI18n[language];
+  const common = commonI18n[language];
   
   const now = useMemo(() => new Date(), []);
   const [formData, setFormData] = useState<FormData>({
     date: now.toLocaleDateString('pt-BR'),
     time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    truck: '',
     company: '',
     field: '',
     variety: '',
+    truck: '',
     driver: '',
     deliveryLocation: '',
-    shippingGuide: '',
-    contract: '',
+    pesoEstimado: '',
+    precoFrete: '',
+    anotacoes: '',
   });
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [dropdownData, setDropdownData] = useState<DropdownData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Modais de seleção de Data e Hora
   const [dateModalVisible, setDateModalVisible] = useState(false);
   const [timeModalVisible, setTimeModalVisible] = useState(false);
+
+  // Modal para adicionar novo item
+  const [addItemModalVisible, setAddItemModalVisible] = useState(false);
+  const [newItemText, setNewItemText] = useState('');
+  const [currentDropdownField, setCurrentDropdownField] = useState<keyof DropdownData | null>(null);
 
   const [selectedDay, setSelectedDay] = useState<number>(now.getDate());
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
@@ -108,6 +133,31 @@ export default function CreateTripScreen() {
     }
   }, [timeModalVisible]);
 
+  // Carregar dados dos dropdowns e atualizar data/hora ao abrir a tela
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchDropdownData();
+        setDropdownData(data);
+        
+        // Atualizar data e hora com valores atuais
+        const currentDate = new Date();
+        setFormData(prev => ({
+          ...prev,
+          date: currentDate.toLocaleDateString('pt-BR'),
+          time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        }));
+      } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
   const formatTwo = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
   const applyDate = () => {
@@ -139,12 +189,34 @@ export default function CreateTripScreen() {
     setActiveDropdown(null);
   };
 
+  const openAddItemModal = (field: keyof DropdownData) => {
+    setCurrentDropdownField(field);
+    setNewItemText('');
+    setAddItemModalVisible(true);
+    setActiveDropdown(null);
+  };
+
+  const addNewItem = () => {
+    if (newItemText.trim() && currentDropdownField && dropdownData) {
+      const updatedData = {
+        ...dropdownData,
+        [currentDropdownField]: [...dropdownData[currentDropdownField], newItemText.trim()]
+      };
+      setDropdownData(updatedData);
+      setFormData(prev => ({ ...prev, [currentDropdownField]: newItemText.trim() }));
+      setAddItemModalVisible(false);
+      setNewItemText('');
+      setCurrentDropdownField(null);
+    }
+  };
+
   const renderDropdown = (
     label: string,
     value: string,
     options: string[],
     field: keyof FormData,
-    icon: keyof typeof Ionicons.glyphMap
+    icon: keyof typeof Ionicons.glyphMap,
+    dropdownField: keyof DropdownData
   ) => {
     const isActive = activeDropdown === field;
     const scale = new Animated.Value(1);
@@ -172,7 +244,6 @@ export default function CreateTripScreen() {
                   field === 'variety' ? t.selectVariety :
                   field === 'driver' ? t.selectDriver :
                   field === 'deliveryLocation' ? t.selectDeliveryLocation :
-                  field === 'contract' ? t.selectContract :
                   `Selecione ${label.toLowerCase()}`)}
               </Text>
             </View>
@@ -194,6 +265,14 @@ export default function CreateTripScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                <TouchableOpacity
+                  style={[styles.dropdownOption, styles.addNewOption]}
+                  onPress={() => openAddItemModal(dropdownField)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="add" size={20} color={PRIMARY} />
+                  <Text style={[styles.dropdownOptionText, styles.addNewText]}>{t.adicionarNovo}</Text>
+                </TouchableOpacity>
                 {options.map((option, index) => (
                   <TouchableOpacity
                     key={index}
@@ -249,34 +328,85 @@ export default function CreateTripScreen() {
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
       >
-        {/* Campos de entrada */}
-        {renderDateTimeField(t.date, formData.date, 'date', 'calendar', t.datePlaceholder)}
-        {renderDateTimeField(t.time, formData.time, 'time', 'time', t.timePlaceholder)}
-        
-        {renderDropdown(t.truck, formData.truck, MOCK_DATA.trucks, 'truck', 'car')}
-        {renderDropdown(t.company, formData.company, MOCK_DATA.companies, 'company', 'business')}
-        {renderDropdown(t.field, formData.field, MOCK_DATA.fields, 'field', 'leaf')}
-        {renderDropdown(t.variety, formData.variety, MOCK_DATA.varieties, 'variety', 'nutrition')}
-        {renderDropdown(t.driver, formData.driver, MOCK_DATA.drivers, 'driver', 'person')}
-        {renderDropdown(t.deliveryLocation, formData.deliveryLocation, MOCK_DATA.deliveryLocations, 'deliveryLocation', 'location')}
-        {renderDropdown(t.contract, formData.contract, MOCK_DATA.contracts, 'contract', 'document-text')}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>{t.carregando}</Text>
+          </View>
+        ) : (
+          <>
+            {/* Campos de entrada */}
+            {renderDateTimeField(t.date, formData.date, 'date', 'calendar', t.datePlaceholder)}
+            {renderDateTimeField(t.time, formData.time, 'time', 'time', t.timePlaceholder)}
+            
+            {dropdownData && (
+              <>
+                {/* Fazenda/Empresa */}
+                {renderDropdown(t.company, formData.company, dropdownData.companies, 'company', 'business', 'companies')}
+                
+                {/* Talhão/Lugar do Carregamento */}
+                {renderDropdown(t.field, formData.field, dropdownData.fields, 'field', 'leaf', 'fields')}
+                
+                {/* Variedade/Produto */}
+                {renderDropdown(t.variety, formData.variety, dropdownData.varieties, 'variety', 'nutrition', 'varieties')}
+                
+                {/* Caminhão */}
+                {renderDropdown(t.truck, formData.truck, dropdownData.trucks, 'truck', 'car', 'trucks')}
+                
+                {/* Motorista */}
+                {renderDropdown(t.driver, formData.driver, dropdownData.drivers, 'driver', 'person', 'drivers')}
+                
+                {/* Destinatário */}
+                {renderDropdown(t.deliveryLocation, formData.deliveryLocation, dropdownData.deliveryLocations, 'deliveryLocation', 'location', 'deliveryLocations')}
+              </>
+            )}
 
-        {/* Campo de texto para Guia de Remessa */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>{t.shippingGuide}</Text>
-          <TextInput
-            style={styles.textInput}
-            value={formData.shippingGuide}
-            onChangeText={(text) => setFormData(prev => ({ ...prev, shippingGuide: text }))}
-            placeholder={t.shippingGuidePlaceholder}
-            placeholderTextColor={TEXT_SECONDARY}
-          />
-        </View>
+            {/* Peso Estimado */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t.pesoEstimado}</Text>
+              <TextInput
+                style={styles.textInput}
+                value={formData.pesoEstimado}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, pesoEstimado: text }))}
+                placeholder={t.pesoEstimadoPlaceholder}
+                placeholderTextColor={TEXT_SECONDARY}
+                keyboardType="numeric"
+              />
+            </View>
 
-        {/* Botão Salvar */}
-        <TouchableOpacity style={styles.saveButton} onPress={() => { closeAllDropdowns(); }} activeOpacity={0.8}>
-          <Text style={styles.saveButtonText}>{t.save}</Text>
-        </TouchableOpacity>
+            {/* Preço do Frete */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t.precoFrete}</Text>
+              <TextInput
+                style={styles.textInput}
+                value={formData.precoFrete}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, precoFrete: text }))}
+                placeholder={t.precoFretePlaceholder}
+                placeholderTextColor={TEXT_SECONDARY}
+                keyboardType="numeric"
+              />
+            </View>
+
+            {/* Campo de anotações */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>{t.anotacoes}</Text>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                value={formData.anotacoes}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, anotacoes: text }))}
+                placeholder={t.anotacoesPlaceholder}
+                placeholderTextColor={TEXT_SECONDARY}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {/* Botão Salvar */}
+            <TouchableOpacity style={styles.saveButton} onPress={() => { closeAllDropdowns(); }} activeOpacity={0.8}>
+              <Text style={styles.saveButtonText}>{t.save}</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
 
       {/* Modal de Data */}
@@ -381,6 +511,45 @@ export default function CreateTripScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.primaryButton} onPress={applyTime}>
                 <Text style={styles.primaryButtonText}>{t.apply}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para Adicionar Novo Item */}
+      <Modal visible={addItemModalVisible} transparent animationType="fade" onRequestClose={() => setAddItemModalVisible(false)}>
+        <View style={styles.backdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t.adicionarNovoItem}</Text>
+              <TouchableOpacity onPress={() => setAddItemModalVisible(false)}>
+                <Ionicons name="close" size={22} color={TEXT} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalContent}>
+              <TextInput
+                style={styles.textInput}
+                value={newItemText}
+                onChangeText={setNewItemText}
+                placeholder={t.novoItemPlaceholder}
+                placeholderTextColor={TEXT_SECONDARY}
+                autoFocus
+              />
+            </View>
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity 
+                style={styles.secondaryButton} 
+                onPress={() => setAddItemModalVisible(false)}
+              >
+                <Text style={styles.secondaryButtonText}>{common.cancel}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.primaryButton, !newItemText.trim() && styles.disabledButton]} 
+                onPress={addNewItem}
+                disabled={!newItemText.trim()}
+              >
+                <Text style={styles.primaryButtonText}>{t.adicionar}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -614,5 +783,38 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontWeight: '600',
     fontSize: 16,
+  },
+  // Novos estilos
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    color: TEXT_SECONDARY,
+    fontSize: 16,
+  },
+  textArea: {
+    height: 100,
+    textAlignVertical: 'top',
+  },
+  addNewOption: {
+    backgroundColor: '#F8F9FA',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addNewText: {
+    color: PRIMARY,
+    fontWeight: '600',
+  },
+  modalContent: {
+    marginVertical: 16,
+  },
+  disabledButton: {
+    backgroundColor: '#E0E0E0',
   },
 });
