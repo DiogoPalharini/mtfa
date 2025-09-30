@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Animated } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Animated, Alert } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useLanguage } from '../contexts/LanguageContext';
-import { loginI18n } from '../i18n/login';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { loginI18n } from '../../i18n/login';
+import { styles, colors, constants } from './styles';
+import { useDatabase, useAuth } from '../../hooks/useDatabase';
 
-const { width } = Dimensions.get('window');
+const { PRIMARY, TEXT_SECONDARY, ERROR, WHITE, BORDER, DISABLED } = colors;
 
 interface LoginFormData {
   username: string;
@@ -17,8 +19,10 @@ export default function LoginScreen() {
   const { language } = useLanguage();
   const t = loginI18n[language];
   
+  const { isInitialized, isLoading: dbLoading, error: dbError } = useDatabase();
+  const { login, isLoading: authLoading } = useAuth();
+  
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   
   // Animações para os campos de input
@@ -67,14 +71,18 @@ export default function LoginScreen() {
   };
 
   const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true);
-    // Simular chamada de API
-    setTimeout(() => {
-      console.log('Login data:', data);
-      setIsLoading(false);
-      // Navegar para a tela home após login bem-sucedido
+    if (!isInitialized) {
+      Alert.alert('Erro', 'Banco de dados não inicializado');
+      return;
+    }
+
+    const success = await login(data.username, data.password);
+    
+    if (success) {
       router.push('/home');
-    }, 1000);
+    } else {
+      Alert.alert('Erro', 'Usuário ou senha incorretos');
+    }
   };
 
   return (
@@ -104,7 +112,7 @@ export default function LoginScreen() {
                   <Animated.View style={[
                     styles.inputWrapper,
                     {
-                      borderColor: focusedField === 'username' ? '#0052CC' : '#E0E0E0',
+                      borderColor: focusedField === 'username' ? PRIMARY : BORDER,
                       transform: [{
                         scale: usernameFocusAnim.interpolate({
                           inputRange: [0, 1],
@@ -119,7 +127,7 @@ export default function LoginScreen() {
                         errors.username && styles.inputError
                       ]}
                       placeholder={t.usernamePlaceholder}
-                      placeholderTextColor="#6C757D"
+                      placeholderTextColor={TEXT_SECONDARY}
                       value={value}
                       onChangeText={onChange}
                       onFocus={() => handleFieldFocus('username', usernameFocusAnim)}
@@ -149,7 +157,7 @@ export default function LoginScreen() {
                   <Animated.View style={[
                     styles.inputWrapper,
                     {
-                      borderColor: focusedField === 'password' ? '#0052CC' : '#E0E0E0',
+                      borderColor: focusedField === 'password' ? PRIMARY : BORDER,
                       transform: [{
                         scale: passwordFocusAnim.interpolate({
                           inputRange: [0, 1],
@@ -165,7 +173,7 @@ export default function LoginScreen() {
                           errors.password && styles.inputError
                         ]}
                         placeholder={t.passwordPlaceholder}
-                        placeholderTextColor="#6C757D"
+                        placeholderTextColor={TEXT_SECONDARY}
                         value={value}
                         onChangeText={onChange}
                         onFocus={() => handleFieldFocus('password', passwordFocusAnim)}
@@ -184,7 +192,7 @@ export default function LoginScreen() {
                         <Ionicons
                           name={showPassword ? 'eye-off' : 'eye'}
                           size={24}
-                          color="#6C757D"
+                          color={TEXT_SECONDARY}
                         />
                       </TouchableOpacity>
                     </View>
@@ -199,16 +207,16 @@ export default function LoginScreen() {
             {/* Botão de Login */}
             <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
               <TouchableOpacity
-                style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+                style={[styles.loginButton, (authLoading || dbLoading) && styles.loginButtonDisabled]}
                 onPress={() => {
                   handleButtonPress();
                   handleSubmit(onSubmit)();
                 }}
-                disabled={isLoading}
+                disabled={authLoading || dbLoading}
                 activeOpacity={0.8}
               >
                 <Text style={styles.loginButtonText}>
-                  {isLoading ? t.loggingIn : t.loginButton}
+                  {authLoading || dbLoading ? t.loggingIn : t.loginButton}
                 </Text>
               </TouchableOpacity>
             </Animated.View>
@@ -221,128 +229,3 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8F9FA',
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 40,
-  },
-  loginCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 32,
-    width: Math.min(width - 40, 400),
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  appTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#212529',
-    marginBottom: 8,
-  },
-  appSubtitle: {
-    fontSize: 16,
-    color: '#6C757D',
-    textAlign: 'center',
-  },
-  formContainer: {
-    width: '100%',
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  inputWrapper: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-  },
-  input: {
-    height: 56,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#212529',
-    backgroundColor: 'transparent',
-  },
-  passwordInput: {
-    flex: 1,
-    height: 56,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#212529',
-    backgroundColor: 'transparent',
-    paddingRight: 50,
-  },
-  passwordContainer: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
-    zIndex: 1,
-    padding: 4,
-  },
-  inputError: {
-    borderColor: '#DC3545',
-  },
-  errorText: {
-    color: '#DC3545',
-    fontSize: 14,
-    marginTop: 6,
-    marginLeft: 4,
-  },
-  loginButton: {
-    backgroundColor: '#0052CC',
-    height: 56,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 20,
-    shadowColor: '#0052CC',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  loginButtonDisabled: {
-    backgroundColor: '#6C757D',
-    shadowOpacity: 0.1,
-  },
-  loginButtonText: {
-    color: 'rgb(255, 255, 255)',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  forgotPasswordLink: {
-    alignItems: 'center',
-    marginTop: 24,
-  },
-  forgotPasswordText: {
-    color: '#6C757D',
-    fontSize: 16,
-    textDecorationLine: 'none',
-  },
-});

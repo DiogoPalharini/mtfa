@@ -1,21 +1,18 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, Animated, Dimensions, Modal } from 'react-native';
+import { Text, View, TextInput, TouchableOpacity, ScrollView, Animated, Modal, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import AppHeader from '../components/AppHeader';
-import { useLanguage } from '../contexts/LanguageContext';
-import { createI18n } from '../i18n/create';
-import { commonI18n } from '../i18n/common';
+import AppHeader from '../../components/AppHeader';
+import AddItemModal from '../../components/AddItemModal';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { createI18n } from '../../i18n/create';
+import { commonI18n } from '../../i18n/common';
+import { styles, colors, constants } from './styles';
+import { useDatabase, useDropdownItems } from '../../hooks/useDatabase';
+import { useTripsContext } from '../../contexts/TripsContext';
 
-const PRIMARY = '#0052CC';
-const BG = '#F8F9FA';
-const SURFACE = '#FFFFFF';
-const TEXT = '#212529';
-const TEXT_SECONDARY = '#6C757D';
-
-const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight ?? 0 : 0;
-const { height: screenHeight } = Dimensions.get('window');
-const ROW_HEIGHT = 44;
+const { PRIMARY, TEXT_SECONDARY, TEXT } = colors;
+const { ROW_HEIGHT } = constants;
 
 interface FormData {
   date: string;
@@ -31,35 +28,22 @@ interface FormData {
   anotacoes: string;
 }
 
-// Interface para os dados dos dropdowns
-interface DropdownData {
-  trucks: string[];
-  companies: string[];
-  fields: string[];
-  varieties: string[];
-  drivers: string[];
-  deliveryLocations: string[];
-}
-
-// Função para simular carregamento dinâmico do banco
-const fetchDropdownData = async (): Promise<DropdownData> => {
-  // Simula delay de rede
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  return {
-    trucks: ['Caminhão 001', 'Caminhão 002', 'Caminhão 003', 'Caminhão 004', 'Caminhão 005', 'Caminhão 006'],
-    companies: ['Empresa A', 'Empresa B', 'Empresa C', 'Empresa D', 'Empresa E'],
-    fields: ['Campo Norte', 'Campo Sul', 'Campo Leste', 'Campo Oeste', 'Campo Central'],
-    varieties: ['Soja', 'Milho', 'Trigo', 'Arroz', 'Algodão'],
-    drivers: ['João Silva', 'Maria Santos', 'Pedro Costa', 'Ana Souza', 'Carlos Lima'],
-    deliveryLocations: ['Porto Santos', 'Silo Central', 'Fábrica ABC', 'Terminal XYZ', 'Armazém 12'],
-  };
-};
 
 export default function CreateTripScreen() {
   const { language } = useLanguage();
   const t = createI18n[language];
   const common = commonI18n[language];
+  
+  const { isInitialized, isLoading: dbLoading, error: dbError } = useDatabase();
+  const { createTrip, isLoading: tripLoading } = useTripsContext();
+  
+  // Hooks para cada categoria de dropdown
+  const trucksHook = useDropdownItems('trucks');
+  const companiesHook = useDropdownItems('companies');
+  const fieldsHook = useDropdownItems('fields');
+  const varietiesHook = useDropdownItems('varieties');
+  const driversHook = useDropdownItems('drivers');
+  const deliveryLocationsHook = useDropdownItems('deliveryLocations');
   
   const now = useMemo(() => new Date(), []);
   const [formData, setFormData] = useState<FormData>({
@@ -77,8 +61,6 @@ export default function CreateTripScreen() {
   });
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [dropdownData, setDropdownData] = useState<DropdownData | null>(null);
-  const [loading, setLoading] = useState(true);
 
   // Modais de seleção de Data e Hora
   const [dateModalVisible, setDateModalVisible] = useState(false);
@@ -86,8 +68,7 @@ export default function CreateTripScreen() {
 
   // Modal para adicionar novo item
   const [addItemModalVisible, setAddItemModalVisible] = useState(false);
-  const [newItemText, setNewItemText] = useState('');
-  const [currentDropdownField, setCurrentDropdownField] = useState<keyof DropdownData | null>(null);
+  const [currentDropdownField, setCurrentDropdownField] = useState<string | null>(null);
 
   const [selectedDay, setSelectedDay] = useState<number>(now.getDate());
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
@@ -135,28 +116,24 @@ export default function CreateTripScreen() {
 
   // Carregar dados dos dropdowns e atualizar data/hora ao abrir a tela
   useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchDropdownData();
-        setDropdownData(data);
-        
-        // Atualizar data e hora com valores atuais
-        const currentDate = new Date();
-        setFormData(prev => ({
-          ...prev,
-          date: currentDate.toLocaleDateString('pt-BR'),
-          time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-        }));
-      } catch (error) {
-        console.error('Erro ao carregar dados:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
+    if (isInitialized) {
+      // Carregar todos os dropdowns
+      trucksHook.loadItems();
+      companiesHook.loadItems();
+      fieldsHook.loadItems();
+      varietiesHook.loadItems();
+      driversHook.loadItems();
+      deliveryLocationsHook.loadItems();
+      
+      // Atualizar data e hora com valores atuais
+      const currentDate = new Date();
+      setFormData(prev => ({
+        ...prev,
+        date: currentDate.toLocaleDateString('pt-BR'),
+        time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      }));
+    }
+  }, [isInitialized]);
 
   const formatTwo = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
@@ -189,24 +166,45 @@ export default function CreateTripScreen() {
     setActiveDropdown(null);
   };
 
-  const openAddItemModal = (field: keyof DropdownData) => {
+  const openAddItemModal = (field: string) => {
     setCurrentDropdownField(field);
-    setNewItemText('');
     setAddItemModalVisible(true);
     setActiveDropdown(null);
   };
 
-  const addNewItem = () => {
-    if (newItemText.trim() && currentDropdownField && dropdownData) {
-      const updatedData = {
-        ...dropdownData,
-        [currentDropdownField]: [...dropdownData[currentDropdownField], newItemText.trim()]
-      };
-      setDropdownData(updatedData);
-      setFormData(prev => ({ ...prev, [currentDropdownField]: newItemText.trim() }));
-      setAddItemModalVisible(false);
-      setNewItemText('');
+  const handleAddNewItem = async (itemName: string) => {
+    if (!currentDropdownField) return;
+
+    let hook;
+    switch (currentDropdownField) {
+      case 'trucks':
+        hook = trucksHook;
+        break;
+      case 'companies':
+        hook = companiesHook;
+        break;
+      case 'fields':
+        hook = fieldsHook;
+        break;
+      case 'varieties':
+        hook = varietiesHook;
+        break;
+      case 'drivers':
+        hook = driversHook;
+        break;
+      case 'deliveryLocations':
+        hook = deliveryLocationsHook;
+        break;
+      default:
+        return;
+    }
+
+    const success = await hook.addItem(itemName);
+    if (success) {
+      setFormData(prev => ({ ...prev, [currentDropdownField]: itemName }));
       setCurrentDropdownField(null);
+    } else {
+      Alert.alert('Erro', 'Não foi possível adicionar o item');
     }
   };
 
@@ -216,7 +214,7 @@ export default function CreateTripScreen() {
     options: string[],
     field: keyof FormData,
     icon: keyof typeof Ionicons.glyphMap,
-    dropdownField: keyof DropdownData
+    dropdownField: string
   ) => {
     const isActive = activeDropdown === field;
     const scale = new Animated.Value(1);
@@ -328,7 +326,7 @@ export default function CreateTripScreen() {
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
       >
-        {loading ? (
+        {dbLoading ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>{t.carregando}</Text>
           </View>
@@ -338,25 +336,25 @@ export default function CreateTripScreen() {
             {renderDateTimeField(t.date, formData.date, 'date', 'calendar', t.datePlaceholder)}
             {renderDateTimeField(t.time, formData.time, 'time', 'time', t.timePlaceholder)}
             
-            {dropdownData && (
+            {isInitialized && (
               <>
                 {/* Fazenda/Empresa */}
-                {renderDropdown(t.company, formData.company, dropdownData.companies, 'company', 'business', 'companies')}
+                {renderDropdown(t.company, formData.company, companiesHook.items.map(item => item.name), 'company', 'business', 'companies')}
                 
                 {/* Talhão/Lugar do Carregamento */}
-                {renderDropdown(t.field, formData.field, dropdownData.fields, 'field', 'leaf', 'fields')}
+                {renderDropdown(t.field, formData.field, fieldsHook.items.map(item => item.name), 'field', 'leaf', 'fields')}
                 
                 {/* Variedade/Produto */}
-                {renderDropdown(t.variety, formData.variety, dropdownData.varieties, 'variety', 'nutrition', 'varieties')}
+                {renderDropdown(t.variety, formData.variety, varietiesHook.items.map(item => item.name), 'variety', 'nutrition', 'varieties')}
                 
                 {/* Caminhão */}
-                {renderDropdown(t.truck, formData.truck, dropdownData.trucks, 'truck', 'car', 'trucks')}
+                {renderDropdown(t.truck, formData.truck, trucksHook.items.map(item => item.name), 'truck', 'car', 'trucks')}
                 
                 {/* Motorista */}
-                {renderDropdown(t.driver, formData.driver, dropdownData.drivers, 'driver', 'person', 'drivers')}
+                {renderDropdown(t.driver, formData.driver, driversHook.items.map(item => item.name), 'driver', 'person', 'drivers')}
                 
                 {/* Destinatário */}
-                {renderDropdown(t.deliveryLocation, formData.deliveryLocation, dropdownData.deliveryLocations, 'deliveryLocation', 'location', 'deliveryLocations')}
+                {renderDropdown(t.deliveryLocation, formData.deliveryLocation, deliveryLocationsHook.items.map(item => item.name), 'deliveryLocation', 'location', 'deliveryLocations')}
               </>
             )}
 
@@ -402,8 +400,43 @@ export default function CreateTripScreen() {
             </View>
 
             {/* Botão Salvar */}
-            <TouchableOpacity style={styles.saveButton} onPress={() => { closeAllDropdowns(); }} activeOpacity={0.8}>
-              <Text style={styles.saveButtonText}>{t.save}</Text>
+            <TouchableOpacity 
+              style={styles.saveButton} 
+              onPress={async () => { 
+                closeAllDropdowns();
+                
+                if (!isInitialized) {
+                  Alert.alert('Erro', 'Banco de dados não inicializado');
+                  return;
+                }
+
+                const success = await createTrip(formData);
+                if (success) {
+                  Alert.alert('Sucesso', 'Viagem salva com sucesso!');
+                  // Limpar formulário
+                  setFormData({
+                    date: new Date().toLocaleDateString('pt-BR'),
+                    time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                    company: '',
+                    field: '',
+                    variety: '',
+                    truck: '',
+                    driver: '',
+                    deliveryLocation: '',
+                    pesoEstimado: '',
+                    precoFrete: '',
+                    anotacoes: '',
+                  });
+                } else {
+                  Alert.alert('Erro', 'Não foi possível salvar a viagem');
+                }
+              }} 
+              activeOpacity={0.8}
+              disabled={tripLoading}
+            >
+              <Text style={styles.saveButtonText}>
+                {tripLoading ? 'Salvando...' : t.save}
+              </Text>
             </TouchableOpacity>
           </>
         )}
@@ -518,303 +551,11 @@ export default function CreateTripScreen() {
       </Modal>
 
       {/* Modal para Adicionar Novo Item */}
-      <Modal visible={addItemModalVisible} transparent animationType="fade" onRequestClose={() => setAddItemModalVisible(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t.adicionarNovoItem}</Text>
-              <TouchableOpacity onPress={() => setAddItemModalVisible(false)}>
-                <Ionicons name="close" size={22} color={TEXT} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalContent}>
-              <TextInput
-                style={styles.textInput}
-                value={newItemText}
-                onChangeText={setNewItemText}
-                placeholder={t.novoItemPlaceholder}
-                placeholderTextColor={TEXT_SECONDARY}
-                autoFocus
-              />
-            </View>
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity 
-                style={styles.secondaryButton} 
-                onPress={() => setAddItemModalVisible(false)}
-              >
-                <Text style={styles.secondaryButtonText}>{common.cancel}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.primaryButton, !newItemText.trim() && styles.disabledButton]} 
-                onPress={addNewItem}
-                disabled={!newItemText.trim()}
-              >
-                <Text style={styles.primaryButtonText}>{t.adicionar}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <AddItemModal
+        visible={addItemModalVisible}
+        onClose={() => setAddItemModalVisible(false)}
+        onAdd={handleAddNewItem}
+      />
     </View>
   );
 }
-
-const CARD_SHADOW = {
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.1,
-  shadowRadius: 8,
-  elevation: 4,
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'android' ? 120 : 80,
-  },
-  inputContainer: {
-    marginBottom: 20,
-    position: 'relative',
-  },
-  inputLabel: {
-    color: TEXT,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  dropdownButton: {
-    backgroundColor: SURFACE,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    ...CARD_SHADOW,
-  },
-  dropdownButtonActive: {
-    borderColor: PRIMARY,
-  },
-  dropdownContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  dropdownText: {
-    color: TEXT,
-    fontSize: 16,
-  },
-  placeholderText: {
-    color: TEXT_SECONDARY,
-  },
-  dropdownOverlay: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    zIndex: 1000,
-    marginTop: 4,
-  },
-  dropdownOptions: {
-    backgroundColor: SURFACE,
-    borderRadius: 12,
-    ...CARD_SHADOW,
-  },
-  dropdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  dropdownHeaderText: {
-    color: TEXT,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  cancelButton: {
-    padding: 4,
-  },
-  dropdownOption: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  dropdownOptionText: {
-    color: TEXT,
-    fontSize: 16,
-  },
-  dateTimeInput: {
-    backgroundColor: SURFACE,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    ...CARD_SHADOW,
-  },
-  dateTimeText: {
-    flex: 1,
-    fontSize: 16,
-    color: TEXT,
-  },
-  textInput: {
-    backgroundColor: SURFACE,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: TEXT,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    ...CARD_SHADOW,
-  },
-  saveButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    padding: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    marginBottom: 32,
-    ...CARD_SHADOW,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  // Modais
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-  },
-  modalCard: {
-    backgroundColor: SURFACE,
-    borderRadius: 16,
-    padding: 16,
-    maxHeight: '85%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  modalTitle: {
-    color: TEXT,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  modalContentRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalColumn: {
-    flex: 1,
-  },
-  modalLabel: {
-    color: TEXT_SECONDARY,
-    fontSize: 12,
-    marginBottom: 6,
-  },
-  modalList: {
-    maxHeight: 220,
-  },
-  modalOption: {
-    height: ROW_HEIGHT,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-  },
-  modalOptionActive: {
-    backgroundColor: '#F2F4F5',
-  },
-  modalOptionText: {
-    color: TEXT,
-    fontSize: 16,
-  },
-  modalOptionTextActive: {
-    fontWeight: 'bold',
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    gap: 12,
-  },
-  primaryButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  secondaryButton: {
-    backgroundColor: '#E9ECEF',
-    borderRadius: 12,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  secondaryButtonText: {
-    color: TEXT,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  // Novos estilos
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  loadingText: {
-    color: TEXT_SECONDARY,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  addNewOption: {
-    backgroundColor: '#F8F9FA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  addNewText: {
-    color: PRIMARY,
-    fontWeight: '600',
-  },
-  modalContent: {
-    marginVertical: 16,
-  },
-  disabledButton: {
-    backgroundColor: '#E0E0E0',
-  },
-});
