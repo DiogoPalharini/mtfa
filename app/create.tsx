@@ -1,11 +1,12 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, Animated, Dimensions, Modal } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, Animated, Dimensions, Modal, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import { useLanguage } from '../contexts/LanguageContext';
 import { createI18n } from '../i18n/create';
 import { commonI18n } from '../i18n/common';
+import { addTruckService, TruckLoadFormData } from '../services/addTruckService';
 
 const PRIMARY = '#0052CC';
 const BG = '#F8F9FA';
@@ -18,27 +19,34 @@ const { height: screenHeight } = Dimensions.get('window');
 const ROW_HEIGHT = 44;
 
 interface FormData {
-  date: string;
-  time: string;
-  company: string;
-  field: string;
-  variety: string;
+  reg_date: string;
+  reg_time: string;
   truck: string;
+  othertruck: string;
+  farm: string;
+  otherfarm: string;
+  field: string;
+  otherfield: string;
+  variety: string;
+  othervariety: string;
   driver: string;
-  deliveryLocation: string;
-  pesoEstimado: string;
-  precoFrete: string;
-  anotacoes: string;
+  otherdriver: string;
+  destination: string;
+  otherdestination: string;
+  dnote: string;
+  agreement: string;
+  otheragreement: string;
 }
 
 // Interface para os dados dos dropdowns
 interface DropdownData {
   trucks: string[];
-  companies: string[];
+  farms: string[];
   fields: string[];
   varieties: string[];
   drivers: string[];
-  deliveryLocations: string[];
+  destinations: string[];
+  agreements: string[];
 }
 
 // Função para simular carregamento dinâmico do banco
@@ -48,11 +56,12 @@ const fetchDropdownData = async (): Promise<DropdownData> => {
   
   return {
     trucks: ['Caminhão 001', 'Caminhão 002', 'Caminhão 003', 'Caminhão 004', 'Caminhão 005', 'Caminhão 006'],
-    companies: ['Empresa A', 'Empresa B', 'Empresa C', 'Empresa D', 'Empresa E'],
+    farms: ['Fazenda Norte', 'Fazenda Sul', 'Fazenda Leste', 'Fazenda Oeste', 'Fazenda Central'],
     fields: ['Campo Norte', 'Campo Sul', 'Campo Leste', 'Campo Oeste', 'Campo Central'],
     varieties: ['Soja', 'Milho', 'Trigo', 'Arroz', 'Algodão'],
     drivers: ['João Silva', 'Maria Santos', 'Pedro Costa', 'Ana Souza', 'Carlos Lima'],
-    deliveryLocations: ['Porto Santos', 'Silo Central', 'Fábrica ABC', 'Terminal XYZ', 'Armazém 12'],
+    destinations: ['Porto Santos', 'Silo Central', 'Fábrica ABC', 'Terminal XYZ', 'Armazém 12'],
+    agreements: ['Acordo Padrão', 'Acordo Especial', 'Contrato Mensal', 'Contrato Anual'],
   };
 };
 
@@ -63,22 +72,29 @@ export default function CreateTripScreen() {
   
   const now = useMemo(() => new Date(), []);
   const [formData, setFormData] = useState<FormData>({
-    date: now.toLocaleDateString('pt-BR'),
-    time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    company: '',
-    field: '',
-    variety: '',
+    reg_date: now.toLocaleDateString('pt-BR'),
+    reg_time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     truck: '',
+    othertruck: '',
+    farm: '',
+    otherfarm: '',
+    field: '',
+    otherfield: '',
+    variety: '',
+    othervariety: '',
     driver: '',
-    deliveryLocation: '',
-    pesoEstimado: '',
-    precoFrete: '',
-    anotacoes: '',
+    otherdriver: '',
+    destination: '',
+    otherdestination: '',
+    dnote: '',
+    agreement: '',
+    otheragreement: '',
   });
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [dropdownData, setDropdownData] = useState<DropdownData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   // Modais de seleção de Data e Hora
   const [dateModalVisible, setDateModalVisible] = useState(false);
@@ -145,8 +161,8 @@ export default function CreateTripScreen() {
         const currentDate = new Date();
         setFormData(prev => ({
           ...prev,
-          date: currentDate.toLocaleDateString('pt-BR'),
-          time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          reg_date: currentDate.toLocaleDateString('pt-BR'),
+          reg_time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         }));
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -162,12 +178,12 @@ export default function CreateTripScreen() {
 
   const applyDate = () => {
     const dateString = `${formatTwo(selectedDay)}/${formatTwo(selectedMonth)}/${selectedYear}`;
-    setFormData(prev => ({ ...prev, date: dateString }));
+    setFormData(prev => ({ ...prev, reg_date: dateString }));
     setDateModalVisible(false);
   };
   const applyTime = () => {
     const timeString = `${formatTwo(selectedHour)}:${formatTwo(selectedMinute)}:${formatTwo(selectedSecond)}`;
-    setFormData(prev => ({ ...prev, time: timeString }));
+    setFormData(prev => ({ ...prev, reg_time: timeString }));
     setTimeModalVisible(false);
   };
   const useNowDate = () => {
@@ -175,18 +191,153 @@ export default function CreateTripScreen() {
     setSelectedDay(d.getDate());
     setSelectedMonth(d.getMonth() + 1);
     setSelectedYear(d.getFullYear());
-    setFormData(prev => ({ ...prev, date: d.toLocaleDateString('pt-BR') }));
+    setFormData(prev => ({ ...prev, reg_date: d.toLocaleDateString('pt-BR') }));
   };
   const useNowTime = () => {
     const d = new Date();
     setSelectedHour(d.getHours());
     setSelectedMinute(d.getMinutes());
     setSelectedSecond(d.getSeconds());
-    setFormData(prev => ({ ...prev, time: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }));
+    setFormData(prev => ({ ...prev, reg_time: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }));
   };
 
   const closeAllDropdowns = () => {
     setActiveDropdown(null);
+  };
+
+  // Função para converter data do formato DD/MM/AAAA para AAAA-MM-DD
+  const formatDateForBackend = (dateString: string): string => {
+    const [day, month, year] = dateString.split('/');
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  };
+
+  // Função para converter hora do formato HH:MM:SS para HH:mm:ss (garantir formato correto)
+  const formatTimeForBackend = (timeString: string): string => {
+    // Remove espaços e garante formato HH:mm:ss
+    return timeString.replace(/\s/g, '').replace(/:/g, ':');
+  };
+
+  // Função para processar campos dropdown com lógica "other"
+  const processDropdownField = (
+    selectedValue: string,
+    otherValue: string,
+    dropdownOptions: string[]
+  ): { mainField: string; otherField: string } => {
+    // Se o valor selecionado existe na lista de opções do dropdown
+    if (dropdownOptions.includes(selectedValue)) {
+      return {
+        mainField: selectedValue,
+        otherField: ''
+      };
+    } else {
+      // Se é um valor customizado (não existe na lista)
+      return {
+        mainField: 'other',
+        otherField: selectedValue
+      };
+    }
+  };
+
+  // Função para salvar o carregamento
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      closeAllDropdowns();
+
+      // Verificar se há sessão válida
+      const hasSession = await addTruckService.hasValidSession();
+      if (!hasSession) {
+        Alert.alert(
+          'Sessão Expirada',
+          'Sua sessão expirou. Faça login novamente.',
+          [{ text: 'OK', onPress: () => router.push('/') }]
+        );
+        return;
+      }
+
+      // Verificar se dropdownData está disponível
+      if (!dropdownData) {
+        Alert.alert('Erro', 'Dados não carregados. Tente novamente.');
+        return;
+      }
+
+      // Processar campos dropdown com lógica "other"
+      const truckData = processDropdownField(formData.truck, formData.othertruck, dropdownData.trucks);
+      const farmData = processDropdownField(formData.farm, formData.otherfarm, dropdownData.farms);
+      const fieldData = processDropdownField(formData.field, formData.otherfield, dropdownData.fields);
+      const varietyData = processDropdownField(formData.variety, formData.othervariety, dropdownData.varieties);
+      const driverData = processDropdownField(formData.driver, formData.otherdriver, dropdownData.drivers);
+      const destinationData = processDropdownField(formData.destination, formData.otherdestination, dropdownData.destinations);
+      const agreementData = processDropdownField(formData.agreement, formData.otheragreement, dropdownData.agreements);
+
+      // Converter dados do formulário para o formato esperado pelo serviço
+      const truckLoadData: TruckLoadFormData = {
+        reg_date: formatDateForBackend(formData.reg_date), // Converter para AAAA-MM-DD
+        reg_time: formatTimeForBackend(formData.reg_time), // Garantir formato HH:mm:ss
+        truck: truckData.mainField,
+        othertruck: truckData.otherField,
+        farm: farmData.mainField,
+        otherfarm: farmData.otherField,
+        field: fieldData.mainField,
+        otherfield: fieldData.otherField,
+        variety: varietyData.mainField,
+        othervariety: varietyData.otherField,
+        driver: driverData.mainField,
+        otherdriver: driverData.otherField,
+        destination: destinationData.mainField,
+        otherdestination: destinationData.otherField,
+        dnote: formData.dnote,
+        agreement: agreementData.mainField,
+        otheragreement: agreementData.otherField,
+      };
+
+      // Chamar o serviço para adicionar o carregamento
+      const result = await addTruckService.addTruckLoad(truckLoadData);
+
+      if (result.success) {
+        Alert.alert(
+          'Sucesso',
+          result.message,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Limpar formulário após sucesso
+                const currentDate = new Date();
+                setFormData({
+                  reg_date: currentDate.toLocaleDateString('pt-BR'),
+                  reg_time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                  truck: '',
+                  othertruck: '',
+                  farm: '',
+                  otherfarm: '',
+                  field: '',
+                  otherfield: '',
+                  variety: '',
+                  othervariety: '',
+                  driver: '',
+                  otherdriver: '',
+                  destination: '',
+                  otherdestination: '',
+                  dnote: '',
+                  agreement: '',
+                  otheragreement: '',
+                });
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Erro ao salvar carregamento:', error);
+      Alert.alert(
+        'Erro',
+        error instanceof Error ? error.message : 'Erro inesperado ao salvar carregamento.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openAddItemModal = (field: keyof DropdownData) => {
@@ -203,7 +354,23 @@ export default function CreateTripScreen() {
         [currentDropdownField]: [...dropdownData[currentDropdownField], newItemText.trim()]
       };
       setDropdownData(updatedData);
-      setFormData(prev => ({ ...prev, [currentDropdownField]: newItemText.trim() }));
+      
+      // Mapear o campo do dropdown para o campo do formulário
+      const fieldMapping: Record<keyof DropdownData, keyof FormData> = {
+        trucks: 'truck',
+        farms: 'farm',
+        fields: 'field',
+        varieties: 'variety',
+        drivers: 'driver',
+        destinations: 'destination',
+        agreements: 'agreement'
+      };
+      
+      const formField = fieldMapping[currentDropdownField];
+      if (formField) {
+        setFormData(prev => ({ ...prev, [formField]: newItemText.trim() }));
+      }
+      
       setAddItemModalVisible(false);
       setNewItemText('');
       setCurrentDropdownField(null);
@@ -239,11 +406,12 @@ export default function CreateTripScreen() {
               <Ionicons name={icon} size={20} color={TEXT_SECONDARY} />
               <Text style={[styles.dropdownText, !value && styles.placeholderText]}>
                 {value || (field === 'truck' ? t.selectTruck :
-                  field === 'company' ? t.selectCompany :
+                  field === 'farm' ? t.selectFarm :
                   field === 'field' ? t.selectField :
                   field === 'variety' ? t.selectVariety :
                   field === 'driver' ? t.selectDriver :
-                  field === 'deliveryLocation' ? t.selectDeliveryLocation :
+                  field === 'destination' ? t.selectDestination :
+                  field === 'agreement' ? t.selectAgreement :
                   `Selecione ${label.toLowerCase()}`)}
               </Text>
             </View>
@@ -297,7 +465,7 @@ export default function CreateTripScreen() {
   const renderDateTimeField = (
     label: string,
     value: string,
-    field: 'date' | 'time',
+    field: 'reg_date' | 'reg_time',
     icon: keyof typeof Ionicons.glyphMap,
     placeholder: string
   ) => {
@@ -306,7 +474,7 @@ export default function CreateTripScreen() {
         <Text style={styles.inputLabel}>{label}</Text>
         <TouchableOpacity
           style={styles.dateTimeInput}
-          onPress={() => (field === 'date' ? setDateModalVisible(true) : setTimeModalVisible(true))}
+          onPress={() => (field === 'reg_date' ? setDateModalVisible(true) : setTimeModalVisible(true))}
           activeOpacity={0.8}
         >
           <Ionicons name={icon} size={20} color={TEXT_SECONDARY} />
@@ -335,65 +503,42 @@ export default function CreateTripScreen() {
         ) : (
           <>
             {/* Campos de entrada */}
-            {renderDateTimeField(t.date, formData.date, 'date', 'calendar', t.datePlaceholder)}
-            {renderDateTimeField(t.time, formData.time, 'time', 'time', t.timePlaceholder)}
+            {renderDateTimeField(t.date, formData.reg_date, 'reg_date', 'calendar', t.datePlaceholder)}
+            {renderDateTimeField(t.time, formData.reg_time, 'reg_time', 'time', t.timePlaceholder)}
             
             {dropdownData && (
               <>
-                {/* Fazenda/Empresa */}
-                {renderDropdown(t.company, formData.company, dropdownData.companies, 'company', 'business', 'companies')}
-                
-                {/* Talhão/Lugar do Carregamento */}
-                {renderDropdown(t.field, formData.field, dropdownData.fields, 'field', 'leaf', 'fields')}
-                
-                {/* Variedade/Produto */}
-                {renderDropdown(t.variety, formData.variety, dropdownData.varieties, 'variety', 'nutrition', 'varieties')}
-                
                 {/* Caminhão */}
                 {renderDropdown(t.truck, formData.truck, dropdownData.trucks, 'truck', 'car', 'trucks')}
+                
+                {/* Fazenda */}
+                {renderDropdown(t.farm, formData.farm, dropdownData.farms, 'farm', 'business', 'farms')}
+                
+                {/* Campo/Talhão */}
+                {renderDropdown(t.field, formData.field, dropdownData.fields, 'field', 'leaf', 'fields')}
+                
+                {/* Variedade */}
+                {renderDropdown(t.variety, formData.variety, dropdownData.varieties, 'variety', 'nutrition', 'varieties')}
                 
                 {/* Motorista */}
                 {renderDropdown(t.driver, formData.driver, dropdownData.drivers, 'driver', 'person', 'drivers')}
                 
-                {/* Destinatário */}
-                {renderDropdown(t.deliveryLocation, formData.deliveryLocation, dropdownData.deliveryLocations, 'deliveryLocation', 'location', 'deliveryLocations')}
+                {/* Destino */}
+                {renderDropdown(t.destination, formData.destination, dropdownData.destinations, 'destination', 'location', 'destinations')}
+                
+                {/* Acordo */}
+                {renderDropdown(t.agreement, formData.agreement, dropdownData.agreements, 'agreement', 'document-text', 'agreements')}
               </>
             )}
 
-            {/* Peso Estimado */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>{t.pesoEstimado}</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formData.pesoEstimado}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, pesoEstimado: text }))}
-                placeholder={t.pesoEstimadoPlaceholder}
-                placeholderTextColor={TEXT_SECONDARY}
-                keyboardType="numeric"
-              />
-            </View>
-
-            {/* Preço do Frete */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>{t.precoFrete}</Text>
-              <TextInput
-                style={styles.textInput}
-                value={formData.precoFrete}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, precoFrete: text }))}
-                placeholder={t.precoFretePlaceholder}
-                placeholderTextColor={TEXT_SECONDARY}
-                keyboardType="numeric"
-              />
-            </View>
-
             {/* Campo de anotações */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>{t.anotacoes}</Text>
+              <Text style={styles.inputLabel}>{t.notes}</Text>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
-                value={formData.anotacoes}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, anotacoes: text }))}
-                placeholder={t.anotacoesPlaceholder}
+                value={formData.dnote}
+                onChangeText={(text) => setFormData(prev => ({ ...prev, dnote: text }))}
+                placeholder={t.notesPlaceholder}
                 placeholderTextColor={TEXT_SECONDARY}
                 multiline
                 numberOfLines={4}
@@ -402,8 +547,15 @@ export default function CreateTripScreen() {
             </View>
 
             {/* Botão Salvar */}
-            <TouchableOpacity style={styles.saveButton} onPress={() => { closeAllDropdowns(); }} activeOpacity={0.8}>
-              <Text style={styles.saveButtonText}>{t.save}</Text>
+            <TouchableOpacity 
+              style={[styles.saveButton, saving && styles.disabledButton]} 
+              onPress={handleSave} 
+              activeOpacity={0.8}
+              disabled={saving}
+            >
+              <Text style={styles.saveButtonText}>
+                {saving ? t.saving : t.save}
+              </Text>
             </TouchableOpacity>
           </>
         )}
