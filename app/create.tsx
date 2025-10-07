@@ -3,10 +3,13 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platfo
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
+import ProtectedRoute from '../components/ProtectedRoute';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { createI18n } from '../i18n/create';
 import { commonI18n } from '../i18n/common';
-import { addTruckService, TruckLoadFormData } from '../services/addTruckService';
+import { syncService } from '../services/syncService';
+import { TruckLoadFormData } from '../services/addTruckService';
 
 const PRIMARY = '#0052CC';
 const BG = '#F8F9FA';
@@ -49,26 +52,46 @@ interface DropdownData {
   agreements: string[];
 }
 
-// Função para simular carregamento dinâmico do banco
-const fetchDropdownData = async (): Promise<DropdownData> => {
-  // Simula delay de rede
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  return {
-    trucks: ['Caminhão 001', 'Caminhão 002', 'Caminhão 003', 'Caminhão 004', 'Caminhão 005', 'Caminhão 006'],
-    farms: ['Fazenda Norte', 'Fazenda Sul', 'Fazenda Leste', 'Fazenda Oeste', 'Fazenda Central'],
-    fields: ['Campo Norte', 'Campo Sul', 'Campo Leste', 'Campo Oeste', 'Campo Central'],
-    varieties: ['Soja', 'Milho', 'Trigo', 'Arroz', 'Algodão'],
-    drivers: ['João Silva', 'Maria Santos', 'Pedro Costa', 'Ana Souza', 'Carlos Lima'],
-    destinations: ['Porto Santos', 'Silo Central', 'Fábrica ABC', 'Terminal XYZ', 'Armazém 12'],
-    agreements: ['Acordo Padrão', 'Acordo Especial', 'Contrato Mensal', 'Contrato Anual'],
+// Função para carregar dados dos dropdowns do banco local
+  const fetchDropdownData = async (): Promise<DropdownData> => {
+    try {
+      // Buscar dados do banco local
+      const localData = await syncService.getAllDropdownData();
+      
+      // Se não há dados locais, retornar arrays vazios
+      if (Object.values(localData).every(arr => arr.length === 0)) {
+        return {
+          trucks: [],
+          farms: [],
+          fields: [],
+          varieties: [],
+          drivers: [],
+          destinations: [],
+          agreements: [],
+        };
+      }
+
+      return localData as unknown as DropdownData;
+    } catch (error) {
+      // Erro ao carregar dados de dropdown
+      // Retornar arrays vazios em caso de erro
+      return {
+        trucks: [],
+        farms: [],
+        fields: [],
+        varieties: [],
+        drivers: [],
+        destinations: [],
+        agreements: [],
+      };
+    }
   };
-};
 
 export default function CreateTripScreen() {
   const { language } = useLanguage();
+  const { user, logout } = useAuth();
   const t = createI18n[language];
-  const common = commonI18n[language];
+  const commonT = commonI18n[language];
   
   const now = useMemo(() => new Date(), []);
   const [formData, setFormData] = useState<FormData>({
@@ -165,7 +188,7 @@ export default function CreateTripScreen() {
           reg_time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         }));
       } catch (error) {
-        console.error('Erro ao carregar dados:', error);
+        // Erro ao carregar dados
       } finally {
         setLoading(false);
       }
@@ -244,20 +267,9 @@ export default function CreateTripScreen() {
       setSaving(true);
       closeAllDropdowns();
 
-      // Verificar se há sessão válida
-      const hasSession = await addTruckService.hasValidSession();
-      if (!hasSession) {
-        Alert.alert(
-          'Sessão Expirada',
-          'Sua sessão expirou. Faça login novamente.',
-          [{ text: 'OK', onPress: () => router.push('/') }]
-        );
-        return;
-      }
-
       // Verificar se dropdownData está disponível
       if (!dropdownData) {
-        Alert.alert('Erro', 'Dados não carregados. Tente novamente.');
+        Alert.alert(commonT.error, commonT.dataLoadError);
         return;
       }
 
@@ -291,49 +303,41 @@ export default function CreateTripScreen() {
         otheragreement: agreementData.otherField,
       };
 
-      // Chamar o serviço para adicionar o carregamento
-      const result = await addTruckService.addTruckLoad(truckLoadData);
+      // Salvar novos valores de dropdown no banco local
+      if (truckData.otherField) await syncService.saveDropdownData('truck', truckData.otherField);
+      if (farmData.otherField) await syncService.saveDropdownData('farm', farmData.otherField);
+      if (fieldData.otherField) await syncService.saveDropdownData('field', fieldData.otherField);
+      if (varietyData.otherField) await syncService.saveDropdownData('variety', varietyData.otherField);
+      if (driverData.otherField) await syncService.saveDropdownData('driver', driverData.otherField);
+      if (destinationData.otherField) await syncService.saveDropdownData('destination', destinationData.otherField);
+      if (agreementData.otherField) await syncService.saveDropdownData('agreement', agreementData.otherField);
+
+      // Usar o serviço de sincronização para salvar localmente e tentar sincronizar
+      const result = await syncService.saveTruckLoad(truckLoadData);
 
       if (result.success) {
         Alert.alert(
-          'Sucesso',
+          commonT.success,
           result.message,
           [
             {
-              text: 'OK',
+              text: commonT.ok,
               onPress: () => {
-                // Limpar formulário após sucesso
-                const currentDate = new Date();
-                setFormData({
-                  reg_date: currentDate.toLocaleDateString('pt-BR'),
-                  reg_time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-                  truck: '',
-                  othertruck: '',
-                  farm: '',
-                  otherfarm: '',
-                  field: '',
-                  otherfield: '',
-                  variety: '',
-                  othervariety: '',
-                  driver: '',
-                  otherdriver: '',
-                  destination: '',
-                  otherdestination: '',
-                  dnote: '',
-                  agreement: '',
-                  otheragreement: '',
-                });
+                // Redirecionar para home após sucesso
+                router.push('/home');
               }
             }
           ]
         );
+      } else {
+        Alert.alert(commonT.error, result.message);
       }
     } catch (error) {
-      console.error('Erro ao salvar carregamento:', error);
+      // Erro ao salvar carregamento
       Alert.alert(
-        'Erro',
-        error instanceof Error ? error.message : 'Erro inesperado ao salvar carregamento.',
-        [{ text: 'OK' }]
+        commonT.error,
+        error instanceof Error ? error.message : commonT.unexpectedError,
+        [{ text: commonT.ok }]
       );
     } finally {
       setSaving(false);
@@ -347,34 +351,63 @@ export default function CreateTripScreen() {
     setActiveDropdown(null);
   };
 
-  const addNewItem = () => {
+  const addNewItem = async () => {
     if (newItemText.trim() && currentDropdownField && dropdownData) {
-      const updatedData = {
-        ...dropdownData,
-        [currentDropdownField]: [...dropdownData[currentDropdownField], newItemText.trim()]
-      };
-      setDropdownData(updatedData);
-      
-      // Mapear o campo do dropdown para o campo do formulário
-      const fieldMapping: Record<keyof DropdownData, keyof FormData> = {
-        trucks: 'truck',
-        farms: 'farm',
-        fields: 'field',
-        varieties: 'variety',
-        drivers: 'driver',
-        destinations: 'destination',
-        agreements: 'agreement'
-      };
-      
-      const formField = fieldMapping[currentDropdownField];
-      if (formField) {
-        setFormData(prev => ({ ...prev, [formField]: newItemText.trim() }));
+      try {
+        // Salvar no banco local
+        await syncService.saveDropdownData(currentDropdownField, newItemText.trim());
+        
+        const updatedData = {
+          ...dropdownData,
+          [currentDropdownField]: [...dropdownData[currentDropdownField], newItemText.trim()]
+        };
+        setDropdownData(updatedData);
+        
+        // Mapear o campo do dropdown para o campo do formulário
+        const fieldMapping: Record<keyof DropdownData, keyof FormData> = {
+          trucks: 'truck',
+          farms: 'farm',
+          fields: 'field',
+          varieties: 'variety',
+          drivers: 'driver',
+          destinations: 'destination',
+          agreements: 'agreement'
+        };
+        
+        const formField = fieldMapping[currentDropdownField];
+        if (formField) {
+          setFormData(prev => ({ ...prev, [formField]: newItemText.trim() }));
+        }
+        
+        setAddItemModalVisible(false);
+        setNewItemText('');
+        setCurrentDropdownField(null);
+      } catch (error) {
+        // Erro ao adicionar item
+        Alert.alert(commonT.error, commonT.addItemError);
       }
-      
-      setAddItemModalVisible(false);
-      setNewItemText('');
-      setCurrentDropdownField(null);
     }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      commonT.confirmLogout,
+      commonT.confirmLogoutMessage,
+      [
+        {
+          text: commonT.cancel,
+          style: 'cancel',
+        },
+        {
+          text: commonT.logout,
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/');
+          },
+        },
+      ]
+    );
   };
 
   const renderDropdown = (
@@ -441,19 +474,27 @@ export default function CreateTripScreen() {
                   <Ionicons name="add" size={20} color={PRIMARY} />
                   <Text style={[styles.dropdownOptionText, styles.addNewText]}>{t.adicionarNovo}</Text>
                 </TouchableOpacity>
-                {options.map((option, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.dropdownOption}
-                    onPress={() => {
-                      setFormData(prev => ({ ...prev, [field]: option }));
-                      setActiveDropdown(null);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.dropdownOptionText}>{option}</Text>
-                  </TouchableOpacity>
-                ))}
+                {options.length === 0 ? (
+                  <View style={styles.emptyOptionsContainer}>
+                    <Ionicons name="add-circle-outline" size={24} color={TEXT_SECONDARY} />
+                    <Text style={styles.emptyOptionsText}>Nenhuma opção disponível</Text>
+                    <Text style={styles.emptyOptionsSubtext}>Adicione uma nova opção usando o botão acima</Text>
+                  </View>
+                ) : (
+                  options.map((option, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.dropdownOption}
+                      onPress={() => {
+                        setFormData(prev => ({ ...prev, [field]: option }));
+                        setActiveDropdown(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.dropdownOptionText}>{option}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
               </ScrollView>
             </View>
           </View>
@@ -485,8 +526,9 @@ export default function CreateTripScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <AppHeader projectName="MTFA" showBack />
+    <ProtectedRoute>
+      <View style={styles.container}>
+        <AppHeader projectName="MTFA" showBack onLogoutPress={handleLogout} />
 
       {/* Conteúdo */}
       <ScrollView 
@@ -694,7 +736,7 @@ export default function CreateTripScreen() {
                 style={styles.secondaryButton} 
                 onPress={() => setAddItemModalVisible(false)}
               >
-                <Text style={styles.secondaryButtonText}>{common.cancel}</Text>
+                <Text style={styles.secondaryButtonText}>{commonT.cancel}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.primaryButton, !newItemText.trim() && styles.disabledButton]} 
@@ -708,6 +750,7 @@ export default function CreateTripScreen() {
         </View>
       </Modal>
     </View>
+    </ProtectedRoute>
   );
 }
 
@@ -962,6 +1005,23 @@ const styles = StyleSheet.create({
   addNewText: {
     color: PRIMARY,
     fontWeight: '600',
+  },
+  emptyOptionsContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+  },
+  emptyOptionsText: {
+    color: TEXT_SECONDARY,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  emptyOptionsSubtext: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    textAlign: 'center',
   },
   modalContent: {
     marginVertical: 16,

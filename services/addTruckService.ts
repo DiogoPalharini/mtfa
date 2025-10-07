@@ -45,11 +45,11 @@ class AddTruckService {
       try {
         // Ler cookie PHPSESSID do AsyncStorage
         const sessionId = await AsyncStorage.getItem('PHPSESSID');
-        console.log('🔍 Debug - SessionId do AsyncStorage:', sessionId);
+        // Debug - SessionId do AsyncStorage
         
         if (sessionId) {
           config.headers.Cookie = `PHPSESSID=${sessionId}`;
-          console.log('✅ Cookie adicionado ao header:', config.headers.Cookie);
+          // Cookie adicionado ao header
         } else {
           console.error('❌ Nenhum cookie PHPSESSID encontrado no AsyncStorage');
         }
@@ -66,7 +66,7 @@ class AddTruckService {
         if (axios.isAxiosError(error)) {
           if (error.response?.status === 401 || error.response?.status === 403) {
             throw new Error('Sessão expirada. Faça login novamente.');
-          } else if (error.response?.status >= 500) {
+          } else if (error.response?.status && error.response.status >= 500) {
             throw new Error('Erro interno do servidor. Tente novamente.');
           } else if (!error.response) {
             throw new Error('Sem conexão com o servidor. Verifique sua internet.');
@@ -117,9 +117,9 @@ class AddTruckService {
         }
       );
 
-      console.log('🔍 Debug - Status da resposta:', response.status);
-      console.log('🔍 Debug - Headers da resposta:', response.headers);
-      console.log('🔍 Debug - Dados da resposta:', response.data);
+      // Debug - Status da resposta
+      // Debug - Headers da resposta  
+      // Debug - Dados da resposta
 
       // Verificar se a resposta é de sucesso
       if (response.status === 302) {

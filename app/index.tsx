@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Animated } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Animated, Alert } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { loginI18n } from '../i18n/login';
+import { commonI18n } from '../i18n/common';
 
 const { width } = Dimensions.get('window');
 
@@ -15,10 +17,11 @@ interface LoginFormData {
 
 export default function LoginScreen() {
   const { language } = useLanguage();
+  const { login, isLoading } = useAuth();
   const t = loginI18n[language];
+  const commonT = commonI18n[language];
   
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
   
   // Animações para os campos de input
@@ -67,14 +70,20 @@ export default function LoginScreen() {
   };
 
   const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true);
-    // Simular chamada de API
-    setTimeout(() => {
-      console.log('Login data:', data);
-      setIsLoading(false);
-      // Navegar para a tela home após login bem-sucedido
-      router.push('/home');
-    }, 1000);
+    try {
+      const result = await login(data.username, data.password);
+      
+      if (result.success) {
+        // Navegar para a tela home após login bem-sucedido
+        router.push('/home');
+      } else {
+        // Mostrar erro de login
+        Alert.alert(commonT.loginError, result.message);
+      }
+    } catch (error) {
+      // Erro no login
+      Alert.alert(commonT.error, commonT.connectionError);
+    }
   };
 
   return (

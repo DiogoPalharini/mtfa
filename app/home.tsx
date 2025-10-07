@@ -1,12 +1,17 @@
-import React, { useMemo, useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar as RNStatusBar, FlatList } from 'react-native';
+import React, { useMemo, useState, useEffect } from 'react';
+import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar as RNStatusBar, FlatList, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import LoadCard, { LoadItem } from '../components/LoadCard';
 import LoadDetailsModal from '../components/LoadDetailsModal';
+import ProtectedRoute from '../components/ProtectedRoute';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { homeI18n } from '../i18n/home';
+import { commonI18n } from '../i18n/common';
+import { syncService } from '../services/syncService';
+import { LocalTruckLoad } from '../services/localDatabaseService';
 
 const PRIMARY = '#0052CC';
 const BG = '#F8F9FA';
@@ -17,44 +22,151 @@ const WARNING = '#FFC107';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight ?? 0 : 0;
 
-const SAMPLE_LOADS: LoadItem[] = [
-  { id: 'LD-2024-0001', date: '2024-11-01', time: '08:40', truck: 'Caminhão 001', driver: 'João Silva', company: 'Empresa A', field: 'Campo Norte', variety: 'Soja', deliveryLocation: 'Porto Santos', status: 'sincronizado' },
-  { id: 'LD-2024-0002', date: '2024-11-01', time: '10:05', truck: 'Caminhão 002', driver: 'Maria Santos', company: 'Empresa B', field: 'Campo Sul', variety: 'Milho', deliveryLocation: 'Silo Central', status: 'pendente' },
-  { id: 'LD-2024-0003', date: '2024-11-02', time: '07:20', truck: 'Caminhão 003', driver: 'Pedro Costa', company: 'Empresa C', field: 'Campo Leste', variety: 'Trigo', deliveryLocation: 'Fábrica ABC', status: 'sincronizado' },
-];
+// Função para converter LocalTruckLoad para LoadItem
+const convertToLoadItem = (localLoad: LocalTruckLoad): LoadItem => {
+  // Converter data de YYYY-MM-DD para DD/MM/YYYY
+  const formatDateForDisplay = (dateString: string): string => {
+    if (!dateString) return '';
+    try {
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Converter hora de HH:mm:ss para HH:mm
+  const formatTimeForDisplay = (timeString: string): string => {
+    if (!timeString) return '';
+    try {
+      return timeString.substring(0, 5); // Remove os segundos
+    } catch {
+      return timeString;
+    }
+  };
+
+  return {
+    id: localLoad.id,
+    date: formatDateForDisplay(localLoad.reg_date),
+    time: formatTimeForDisplay(localLoad.reg_time),
+    truck: localLoad.othertruck || localLoad.truck,
+    othertruck: localLoad.othertruck || undefined,
+    driver: localLoad.otherdriver || localLoad.driver,
+    otherdriver: localLoad.otherdriver || undefined,
+    company: localLoad.otherfarm || localLoad.farm,
+    otherfarm: localLoad.otherfarm || undefined,
+    field: localLoad.otherfield || localLoad.field,
+    otherfield: localLoad.otherfield || undefined,
+    variety: localLoad.othervariety || localLoad.variety,
+    othervariety: localLoad.othervariety || undefined,
+    deliveryLocation: localLoad.otherdestination || localLoad.destination,
+    otherdestination: localLoad.otherdestination || undefined,
+    agreement: localLoad.otheragreement || localLoad.agreement,
+    otheragreement: localLoad.otheragreement || undefined,
+    notes: localLoad.dnote || undefined,
+    status: localLoad.status === 'synced' ? 'sincronizado' : 'pendente',
+    created_at: localLoad.created_at,
+    synced_at: localLoad.synced_at
+  };
+};
 
 export default function HomeScreen() {
   const { language } = useLanguage();
+  const { user, logout } = useAuth();
   const t = homeI18n[language];
+  const commonT = commonI18n[language];
 
-  const [pending, setPending] = useState<number>(1);
+  const [truckLoads, setTruckLoads] = useState<LoadItem[]>([]);
+  const [pending, setPending] = useState<number>(0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [selectedLoad, setSelectedLoad] = useState<LoadItem | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const syncColor = useMemo(() => (pending === 0 ? SUCCESS : WARNING), [pending]);
   const syncText = useMemo(() => (pending === 0 ? t.allSynced : `${pending} ${t.pending}`), [pending, t]);
 
+  // Carregar dados do banco local
+  const loadTruckLoads = async () => {
+    try {
+      setIsLoading(true);
+      const localLoads = await syncService.getAllTruckLoads();
+      const convertedLoads = localLoads.map(convertToLoadItem);
+      setTruckLoads(convertedLoads);
+      
+      // Atualizar contador de pendentes
+      const stats = await syncService.getStats();
+      setPending(stats.pending);
+    } catch (error) {
+      // Erro ao carregar carregamentos
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Carregar dados quando a tela é montada
+  useEffect(() => {
+    loadTruckLoads();
+  }, []);
+
   const handleSyncNow = async () => {
     if (isSyncing) return;
+    
     setIsSyncing(true);
-    setTimeout(() => {
-      setPending(0);
+    try {
+      const result = await syncService.syncAllPendingLoads();
+      
+      if (result.success) {
+        Alert.alert(commonT.success, result.message);
+        // Recarregar dados após sincronização
+        await loadTruckLoads();
+      } else {
+        Alert.alert(commonT.error, result.message);
+      }
+    } catch (error) {
+      // Erro na sincronização
+      Alert.alert(commonT.error, commonT.syncError);
+    } finally {
       setIsSyncing(false);
-    }, 1000);
+    }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(
+      commonT.confirmLogout,
+      commonT.confirmLogoutMessage,
+      [
+        {
+          text: commonT.cancel,
+          style: 'cancel',
+        },
+        {
+          text: commonT.logout,
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/');
+          },
+        },
+      ]
+    );
   };
 
   return (
-    <View style={styles.container}>
-      <AppHeader 
-        projectName="MTFA" 
-        showSync={true}
-        isSyncing={isSyncing}
-        onSyncPress={handleSyncNow}
-      />
+    <ProtectedRoute>
+      <View style={styles.container}>
+        <AppHeader 
+          projectName="MTFA" 
+          showSync={true}
+          isSyncing={isSyncing}
+          onSyncPress={handleSyncNow}
+          onLogoutPress={handleLogout}
+        />
 
-      <View style={styles.content}>
-        <Text style={styles.welcome}>{t.welcome}</Text>
+        <View style={styles.content}>
+          <Text style={styles.welcome}>
+            {t.welcome.replace('Usuário', user?.name || user?.username || 'Usuário')}
+          </Text>
 
         <View style={styles.syncCard}>
           <View style={styles.syncCardHeader}>
@@ -74,16 +186,28 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>{t.recentLoads}</Text>
-        <FlatList
-          data={SAMPLE_LOADS}
-          keyExtractor={(i) => i.id}
-          renderItem={({ item }) => (
-            <LoadCard item={item} onPress={(load) => { setSelectedLoad(load); setDetailsVisible(true); }} />
-          )}
-          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-          contentContainerStyle={{ paddingBottom: Platform.OS === 'android' ? 120 : 80 }}
-          showsVerticalScrollIndicator={false}
-        />
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Carregando carregamentos...</Text>
+          </View>
+        ) : truckLoads.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="document-outline" size={48} color={TEXT_SECONDARY} />
+            <Text style={styles.emptyText}>Nenhum carregamento encontrado</Text>
+            <Text style={styles.emptySubtext}>Crie seu primeiro carregamento usando o botão acima</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={truckLoads}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <LoadCard item={item} onPress={(load) => { setSelectedLoad(load); setDetailsVisible(true); }} />
+            )}
+            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+            contentContainerStyle={{ paddingBottom: Platform.OS === 'android' ? 120 : 80 }}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
       </View>
 
       <LoadDetailsModal
@@ -92,6 +216,7 @@ export default function HomeScreen() {
         onClose={() => setDetailsVisible(false)}
       />
     </View>
+    </ProtectedRoute>
   );
 }
 
@@ -102,6 +227,8 @@ const CARD_SHADOW = {
   shadowRadius: 8,
   elevation: 4,
 };
+
+const TEXT_SECONDARY = '#6C757D';
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
@@ -114,4 +241,9 @@ const styles = StyleSheet.create({
   sectionTitle: { color: TEXT, fontSize: 16, fontWeight: 'bold', marginBottom: 12, marginTop: 8 },
   createButton: { backgroundColor: PRIMARY, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16, ...CARD_SHADOW },
   createButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  loadingText: { color: TEXT_SECONDARY, fontSize: 16 },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  emptyText: { color: TEXT, fontSize: 18, fontWeight: 'bold', marginTop: 16, marginBottom: 8 },
+  emptySubtext: { color: TEXT_SECONDARY, fontSize: 14, textAlign: 'center' },
 });

@@ -17,6 +17,7 @@ interface AppHeaderProps {
   showSync?: boolean;
   isSyncing?: boolean;
   onSyncPress?: () => void;
+  onLogoutPress?: () => void;
 }
 
 export default function AppHeader({ 
@@ -24,7 +25,8 @@ export default function AppHeader({
   showBack = false, 
   showSync = false, 
   isSyncing = false, 
-  onSyncPress 
+  onSyncPress,
+  onLogoutPress
 }: AppHeaderProps) {
   const { language, setLanguage } = useLanguage();
   const [openLangMenu, setOpenLangMenu] = useState(false);
@@ -74,6 +76,16 @@ export default function AppHeader({
                   size={24} 
                   color={TEXT_ON_PRIMARY} 
                 />
+              </TouchableOpacity>
+            )}
+            
+            {onLogoutPress && (
+              <TouchableOpacity 
+                style={styles.logoutButton} 
+                onPress={onLogoutPress}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="log-out-outline" size={24} color={TEXT_ON_PRIMARY} />
               </TouchableOpacity>
             )}
             
@@ -131,6 +143,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   syncButton: {
+    padding: 4,
+    opacity: 1,
+  },
+  logoutButton: {
     padding: 4,
     opacity: 1,
   },
