@@ -165,7 +165,7 @@ export default function HomeScreen() {
 
         <View style={styles.content}>
           <Text style={styles.welcome}>
-            {t.welcome.replace('Usuário', user?.name || user?.username || 'Usuário')}
+            {t.welcome.replace('{user}', user?.name || user?.username || user?.email || 'Usuário')}
           </Text>
 
         <View style={styles.syncCard}>

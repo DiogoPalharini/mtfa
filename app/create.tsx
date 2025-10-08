@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
 import ProtectedRoute from '../components/ProtectedRoute';
+import AddNewItemCard from '../components/AddNewItemCard';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { createI18n } from '../i18n/create';
@@ -58,22 +59,21 @@ interface DropdownData {
       // Buscar dados do banco local
       const localData = await syncService.getAllDropdownData();
       
-      // Se não há dados locais, retornar arrays vazios
-      if (Object.values(localData).every(arr => arr.length === 0)) {
-        return {
-          trucks: [],
-          farms: [],
-          fields: [],
-          varieties: [],
-          drivers: [],
-          destinations: [],
-          agreements: [],
-        };
-      }
-
-      return localData as unknown as DropdownData;
+      // Garantir que todos os campos existam (mapeando tipos singulares para plurais)
+      const dropdownData: DropdownData = {
+        trucks: localData.truck || [],
+        farms: localData.farm || [],
+        fields: localData.field || [],
+        varieties: localData.variety || [],
+        drivers: localData.driver || [],
+        destinations: localData.destination || [],
+        agreements: localData.agreement || [],
+      };
+      
+      
+      return dropdownData;
     } catch (error) {
-      // Erro ao carregar dados de dropdown
+      console.error('❌ Erro ao carregar dados de dropdown:', error);
       // Retornar arrays vazios em caso de erro
       return {
         trucks: [],
@@ -123,10 +123,6 @@ export default function CreateTripScreen() {
   const [dateModalVisible, setDateModalVisible] = useState(false);
   const [timeModalVisible, setTimeModalVisible] = useState(false);
 
-  // Modal para adicionar novo item
-  const [addItemModalVisible, setAddItemModalVisible] = useState(false);
-  const [newItemText, setNewItemText] = useState('');
-  const [currentDropdownField, setCurrentDropdownField] = useState<keyof DropdownData | null>(null);
 
   const [selectedDay, setSelectedDay] = useState<number>(now.getDate());
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
@@ -246,8 +242,11 @@ export default function CreateTripScreen() {
     otherValue: string,
     dropdownOptions: string[]
   ): { mainField: string; otherField: string } => {
+    // Garantir que dropdownOptions seja um array válido
+    const options = Array.isArray(dropdownOptions) ? dropdownOptions : [];
+    
     // Se o valor selecionado existe na lista de opções do dropdown
-    if (dropdownOptions.includes(selectedValue)) {
+    if (options.includes(selectedValue)) {
       return {
         mainField: selectedValue,
         otherField: ''
@@ -261,7 +260,6 @@ export default function CreateTripScreen() {
     }
   };
 
-  // Função para salvar o carregamento
   const handleSave = async () => {
     try {
       setSaving(true);
@@ -273,6 +271,7 @@ export default function CreateTripScreen() {
         return;
       }
 
+
       // Processar campos dropdown com lógica "other"
       const truckData = processDropdownField(formData.truck, formData.othertruck, dropdownData.trucks);
       const farmData = processDropdownField(formData.farm, formData.otherfarm, dropdownData.farms);
@@ -281,6 +280,60 @@ export default function CreateTripScreen() {
       const driverData = processDropdownField(formData.driver, formData.otherdriver, dropdownData.drivers);
       const destinationData = processDropdownField(formData.destination, formData.otherdestination, dropdownData.destinations);
       const agreementData = processDropdownField(formData.agreement, formData.otheragreement, dropdownData.agreements);
+
+
+      // SALVAR AUTOMATICAMENTE TODOS OS ITENS DOS SELECTS USADOS
+      
+      const itemsToSave = [
+        // Salvar valores principais se não forem "other" (usando tipos singulares)
+        { type: 'truck', value: truckData.mainField !== 'other' ? truckData.mainField : null },
+        { type: 'farm', value: farmData.mainField !== 'other' ? farmData.mainField : null },
+        { type: 'field', value: fieldData.mainField !== 'other' ? fieldData.mainField : null },
+        { type: 'variety', value: varietyData.mainField !== 'other' ? varietyData.mainField : null },
+        { type: 'driver', value: driverData.mainField !== 'other' ? driverData.mainField : null },
+        { type: 'destination', value: destinationData.mainField !== 'other' ? destinationData.mainField : null },
+        { type: 'agreement', value: agreementData.mainField !== 'other' ? agreementData.mainField : null },
+        
+        // Salvar valores "other" (customizados) - usando tipos singulares
+        { type: 'truck', value: truckData.otherField || null },
+        { type: 'farm', value: farmData.otherField || null },
+        { type: 'field', value: fieldData.otherField || null },
+        { type: 'variety', value: varietyData.otherField || null },
+        { type: 'driver', value: driverData.otherField || null },
+        { type: 'destination', value: destinationData.otherField || null },
+        { type: 'agreement', value: agreementData.otherField || null },
+      ];
+
+      // Filtrar apenas valores válidos e salvar
+      
+      for (const item of itemsToSave) {
+        if (item.value && item.value.trim()) {
+          const saved = await syncService.saveDropdownData(item.type, item.value.trim());
+        } else {
+        }
+      }
+      
+
+      // ATUALIZAR ESTADO LOCAL DOS DROPDOWNS COM OS NOVOS ITENS
+      const updatedDropdownData = { ...dropdownData };
+      
+      // Adicionar novos itens aos arrays locais se não existirem
+      const addToArray = (type: keyof DropdownData, value: string) => {
+        if (value && updatedDropdownData[type] && Array.isArray(updatedDropdownData[type])) {
+          if (!updatedDropdownData[type].includes(value)) {
+            updatedDropdownData[type].push(value);
+          }
+        }
+      };
+
+      // Adicionar todos os itens salvos ao estado local
+      for (const item of itemsToSave) {
+        if (item.value && item.value.trim()) {
+          addToArray(item.type as keyof DropdownData, item.value.trim());
+        }
+      }
+      
+      setDropdownData(updatedDropdownData);
 
       // Converter dados do formulário para o formato esperado pelo serviço
       const truckLoadData: TruckLoadFormData = {
@@ -344,50 +397,7 @@ export default function CreateTripScreen() {
     }
   };
 
-  const openAddItemModal = (field: keyof DropdownData) => {
-    setCurrentDropdownField(field);
-    setNewItemText('');
-    setAddItemModalVisible(true);
-    setActiveDropdown(null);
-  };
 
-  const addNewItem = async () => {
-    if (newItemText.trim() && currentDropdownField && dropdownData) {
-      try {
-        // Salvar no banco local
-        await syncService.saveDropdownData(currentDropdownField, newItemText.trim());
-        
-        const updatedData = {
-          ...dropdownData,
-          [currentDropdownField]: [...dropdownData[currentDropdownField], newItemText.trim()]
-        };
-        setDropdownData(updatedData);
-        
-        // Mapear o campo do dropdown para o campo do formulário
-        const fieldMapping: Record<keyof DropdownData, keyof FormData> = {
-          trucks: 'truck',
-          farms: 'farm',
-          fields: 'field',
-          varieties: 'variety',
-          drivers: 'driver',
-          destinations: 'destination',
-          agreements: 'agreement'
-        };
-        
-        const formField = fieldMapping[currentDropdownField];
-        if (formField) {
-          setFormData(prev => ({ ...prev, [formField]: newItemText.trim() }));
-        }
-        
-        setAddItemModalVisible(false);
-        setNewItemText('');
-        setCurrentDropdownField(null);
-      } catch (error) {
-        // Erro ao adicionar item
-        Alert.alert(commonT.error, commonT.addItemError);
-      }
-    }
-  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -466,35 +476,46 @@ export default function CreateTripScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                <TouchableOpacity
-                  style={[styles.dropdownOption, styles.addNewOption]}
-                  onPress={() => openAddItemModal(dropdownField)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add" size={20} color={PRIMARY} />
-                  <Text style={[styles.dropdownOptionText, styles.addNewText]}>{t.adicionarNovo}</Text>
-                </TouchableOpacity>
-                {options.length === 0 ? (
-                  <View style={styles.emptyOptionsContainer}>
-                    <Ionicons name="add-circle-outline" size={24} color={TEXT_SECONDARY} />
-                    <Text style={styles.emptyOptionsText}>Nenhuma opção disponível</Text>
-                    <Text style={styles.emptyOptionsSubtext}>Adicione uma nova opção usando o botão acima</Text>
-                  </View>
-                ) : (
-                  options.map((option, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.dropdownOption}
-                      onPress={() => {
-                        setFormData(prev => ({ ...prev, [field]: option }));
-                        setActiveDropdown(null);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.dropdownOptionText}>{option}</Text>
-                    </TouchableOpacity>
-                  ))
-                )}
+                <AddNewItemCard
+                  fieldType={field as 'truck' | 'farm' | 'field' | 'variety' | 'driver' | 'destination' | 'agreement'}
+                  onItemAdded={async (newItem: string) => {
+                    
+                    // Recarregar dados do banco para garantir persistência
+                    try {
+                      const freshData = await fetchDropdownData();
+                      setDropdownData(freshData as DropdownData);
+                    } catch (error) {
+                      console.error('❌ Erro ao recarregar dados:', error);
+                      // Fallback: atualizar estado local
+                      if (dropdownData) {
+                        const currentArray = dropdownData[dropdownField] || [];
+                        const updatedData = {
+                          ...dropdownData,
+                          [dropdownField]: [...currentArray, newItem]
+                        };
+                        setDropdownData(updatedData);
+                      }
+                    }
+                    
+                    // Selecionar o novo item automaticamente
+                    setFormData(prev => ({ ...prev, [field]: newItem }));
+                    setActiveDropdown(null);
+                  }}
+                  onClose={() => setActiveDropdown(null)}
+                />
+                {options.map((option, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.dropdownOption}
+                    onPress={() => {
+                      setFormData(prev => ({ ...prev, [field]: option }));
+                      setActiveDropdown(null);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.dropdownOptionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
               </ScrollView>
             </View>
           </View>
@@ -588,7 +609,6 @@ export default function CreateTripScreen() {
               />
             </View>
 
-            {/* Botão Salvar */}
             <TouchableOpacity 
               style={[styles.saveButton, saving && styles.disabledButton]} 
               onPress={handleSave} 
@@ -711,44 +731,6 @@ export default function CreateTripScreen() {
         </View>
       </Modal>
 
-      {/* Modal para Adicionar Novo Item */}
-      <Modal visible={addItemModalVisible} transparent animationType="fade" onRequestClose={() => setAddItemModalVisible(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t.adicionarNovoItem}</Text>
-              <TouchableOpacity onPress={() => setAddItemModalVisible(false)}>
-                <Ionicons name="close" size={22} color={TEXT} />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalContent}>
-              <TextInput
-                style={styles.textInput}
-                value={newItemText}
-                onChangeText={setNewItemText}
-                placeholder={t.novoItemPlaceholder}
-                placeholderTextColor={TEXT_SECONDARY}
-                autoFocus
-              />
-            </View>
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity 
-                style={styles.secondaryButton} 
-                onPress={() => setAddItemModalVisible(false)}
-              >
-                <Text style={styles.secondaryButtonText}>{commonT.cancel}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.primaryButton, !newItemText.trim() && styles.disabledButton]} 
-                onPress={addNewItem}
-                disabled={!newItemText.trim()}
-              >
-                <Text style={styles.primaryButtonText}>{t.adicionar}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
     </ProtectedRoute>
   );

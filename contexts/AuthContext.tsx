@@ -27,31 +27,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkSavedSession = async () => {
     try {
       setIsLoading(true);
+('🔍 Verificando sessão salva...');
       
       // Verificar se há sessão salva
       const hasSession = await cloudLoginService.hasValidSession();
+('🔍 Tem sessão salva?', hasSession);
+      
+      // Verificar se há credenciais locais também
+      const hasLocalCredentials = await localAuthService.hasStoredCredentials();
+('🔍 Tem credenciais locais?', hasLocalCredentials);
       
       if (hasSession) {
         // Tentar validar a sessão com o servidor
         const isValid = await validateSessionWithServer();
+('🔍 Sessão é válida?', isValid);
         
         if (isValid) {
           // Carregar dados do usuário salvos
           const savedUser = await AsyncStorage.getItem('userData');
+('🔍 Tem dados de usuário salvos?', !!savedUser);
+          
           if (savedUser) {
             setUser(JSON.parse(savedUser));
             setIsAuthenticated(true);
+('✅ Usuário autenticado via sessão válida');
           }
         } else {
-          // Sessão inválida, limpar dados
-          await clearAuthData();
+          // Sessão inválida, mas manter credenciais locais para login offline
+('⚠️ Sessão inválida, mas mantendo credenciais locais');
+          // Não limpar dados se há credenciais locais
+          if (!hasLocalCredentials) {
+            await clearAuthData();
+          }
         }
+      } else if (hasLocalCredentials) {
+        // Não há sessão online, mas há credenciais locais
+('🔍 Sem sessão online, mas há credenciais locais disponíveis');
+        // Não limpar dados, permitir login offline
       } else {
+        // Não há nem sessão nem credenciais locais
+('🔍 Sem sessão nem credenciais locais');
         await clearAuthData();
       }
     } catch (error) {
-      console.error('Erro ao verificar sessão:', error);
-      await clearAuthData();
+      console.error('❌ Erro ao verificar sessão:', error);
+      // Em caso de erro, não limpar dados automaticamente
+('⚠️ Erro na verificação, mantendo estado atual');
     } finally {
       setIsLoading(false);
     }
@@ -69,12 +90,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearAuthData = async () => {
     try {
+('🧹 Limpando dados de autenticação...');
       await AsyncStorage.removeItem('userData');
       await cloudLoginService.logout();
+      // NÃO limpar credenciais locais aqui - elas devem persistir para login offline
+      // await localAuthService.clearCredentials(); // Removido
       setUser(null);
       setIsAuthenticated(false);
+('✅ Dados de autenticação limpos (exceto credenciais locais)');
     } catch (error) {
-      console.error('Erro ao limpar dados de autenticação:', error);
+      console.error('❌ Erro ao limpar dados de autenticação:', error);
     }
   };
 
@@ -82,21 +107,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       
+('🔐 Iniciando processo de login para:', username);
+      
       // Primeiro, tentar login online
       try {
         const onlineResult = await cloudLoginService.loginUser(username, password);
         
+('🌐 Resultado do login online:', {
+          success: onlineResult.success,
+          hasUserData: !!onlineResult.userData,
+          hasSessionId: !!onlineResult.sessionId,
+          userData: onlineResult.userData,
+          sessionId: onlineResult.sessionId
+        });
+        
+        // Verificar se o login online foi bem-sucedido
         if (onlineResult.success && onlineResult.userData && onlineResult.sessionId) {
           // Login online bem-sucedido - salvar credenciais localmente
-          await localAuthService.saveCredentials(username, password, onlineResult.sessionId);
+('✅ Login online bem-sucedido, salvando credenciais...');
+          
+          const credentialsSaved = await localAuthService.saveCredentials(username, password, onlineResult.sessionId);
+('💾 Credenciais salvas:', credentialsSaved);
           
           // Salvar dados do usuário
           await AsyncStorage.setItem('userData', JSON.stringify(onlineResult.userData));
           setUser(onlineResult.userData);
           setIsAuthenticated(true);
           
+('🎉 Login online concluído com sucesso!');
           return { success: true, message: 'Login realizado com sucesso!' };
         } else {
+('❌ Login online falhou - condições não atendidas:', {
+            success: onlineResult.success,
+            hasUserData: !!onlineResult.userData,
+            hasSessionId: !!onlineResult.sessionId
+          });
           // Login online falhou - tentar login offline
           const offlineResult = await localAuthService.validateOfflineLogin(username, password);
           
@@ -120,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (onlineError) {
+('❌ Erro no login online:', onlineError);
         // Login online falhou, tentando offline
         
         // Login online falhou - tentar login offline
@@ -145,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
-      console.error('Erro no login:', error);
+      console.error('❌ Erro geral no login:', error);
       return { success: false, message: 'Falha na autenticação. Verifique suas credenciais.' };
     } finally {
       setIsLoading(false);
@@ -155,12 +201,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       setIsLoading(true);
+('🚪 Fazendo logout...');
       await clearAuthData();
-      await localAuthService.clearCredentials(); // Limpar credenciais locais também
+      await localAuthService.clearCredentials(); // Limpar credenciais SQLite no logout explícito
       setUser(null);
       setIsAuthenticated(false);
+('✅ Logout concluído');
     } catch (error) {
-      console.error('Erro no logout:', error);
+      console.error('❌ Erro no logout:', error);
     } finally {
       setIsLoading(false);
     }

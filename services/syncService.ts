@@ -257,7 +257,10 @@ class SyncService {
     return await localDatabaseService.deleteTruckLoad(id);
   }
 
-  // Obter timestamp da última sincronização
+  // Limpar dados de exemplo do banco
+  async clearExampleData(): Promise<void> {
+    return await localDatabaseService.clearExampleData();
+  }
   async getLastSyncTimestamp(): Promise<Date | null> {
     try {
       const timestamp = await AsyncStorage.getItem('lastSyncTimestamp');

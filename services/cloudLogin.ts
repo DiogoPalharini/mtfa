@@ -160,17 +160,26 @@ class CloudLoginService {
 
   // Criar resposta de login
   private createLoginResponse(username: string, sessionId: string): LoginResponse {
+    const userData: CloudUser = {
+      id: Date.now(),
+      username: username,
+      email: username.includes('@') ? username : `${username}@mtfa.com`,
+      name: username,
+      created_at: new Date().toISOString(),
+      sessionId: sessionId
+    };
+
+('🔧 Criando resposta de login:', {
+      success: true,
+      sessionId: sessionId,
+      userData: userData
+    });
+
     return {
       success: true,
       message: 'Login bem-sucedido',
       sessionId: sessionId,
-      userData: {
-        id: Date.now(),
-        username: username,
-        email: username.includes('@') ? username : `${username}@mtfa.com`,
-        name: username,
-        created_at: new Date().toISOString(),
-      }
+      userData: userData
     };
   }
 

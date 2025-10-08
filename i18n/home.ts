@@ -2,7 +2,7 @@ import type { LanguageCode } from '../contexts/LanguageContext';
 
 export const homeI18n: Record<LanguageCode, Record<string, string>> = {
   pt: {
-    welcome: 'Olá, Usuário!',
+    welcome: 'Olá, {user}!',
     syncStatusTitle: 'Status da Sincronização',
     syncing: 'Sincronizando...',
     syncNow: 'Sincronizar Agora',
@@ -13,7 +13,7 @@ export const homeI18n: Record<LanguageCode, Record<string, string>> = {
     syncTooltip: 'Sincronizar dados',
   },
   en: {
-    welcome: 'Hello, User!',
+    welcome: 'Hello, {user}!',
     syncStatusTitle: 'Sync Status',
     syncing: 'Syncing...',
     syncNow: 'Sync Now',
@@ -24,7 +24,7 @@ export const homeI18n: Record<LanguageCode, Record<string, string>> = {
     syncTooltip: 'Sync data',
   },
   de: {
-    welcome: 'Hallo, Benutzer!',
+    welcome: 'Hallo, {user}!',
     syncStatusTitle: 'Synchronisierungsstatus',
     syncing: 'Synchronisieren...',
     syncNow: 'Jetzt synchronisieren',

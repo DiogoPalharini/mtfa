@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "mtfa",
+    "name": "MTFA",
     "slug": "mtfa",
     "version": "1.0.0",
     "scheme": "mtfa",
@@ -20,7 +20,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "displayName": "MTFA"
     },
     "android": {
       "adaptiveIcon": {
