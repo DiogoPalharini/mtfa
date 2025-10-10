@@ -11,6 +11,7 @@ import {
 import { useLanguage } from '../contexts/LanguageContext';
 import { syncService } from '../services/syncService';
 import { commonI18n } from '../i18n/common';
+import { createI18n } from '../i18n/create';
 
 interface AddNewItemCardProps {
   fieldType: 'truck' | 'farm' | 'field' | 'variety' | 'driver' | 'destination' | 'agreement';
@@ -32,6 +33,7 @@ const FIELD_TYPE_MAPPING: Record<string, string> = {
 export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddNewItemCardProps) {
   const { language } = useLanguage();
   const commonT = commonI18n[language];
+  const t = createI18n[language];
   const [newItemText, setNewItemText] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -87,7 +89,7 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
       {/* Botão de adicionar */}
       <TouchableOpacity style={styles.addButton} onPress={handleAddNew}>
         <Text style={styles.addButtonIcon}>+</Text>
-        <Text style={styles.addButtonText}>Adicionar novo</Text>
+        <Text style={styles.addButtonText}>{t.adicionarNovo}</Text>
       </TouchableOpacity>
 
       {/* Modal para adicionar item */}
@@ -100,7 +102,7 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Adicionar Novo Item</Text>
+              <Text style={styles.modalTitle}>{t.adicionarNovoItem}</Text>
               <TouchableOpacity onPress={handleCancel} style={styles.closeButton}>
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
@@ -108,20 +110,20 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
 
             <View style={styles.modalBody}>
               <Text style={styles.fieldLabel}>
-                {fieldType === 'truck' && 'Caminhão'}
-                {fieldType === 'farm' && 'Fazenda'}
-                {fieldType === 'field' && 'Campo'}
-                {fieldType === 'variety' && 'Variedade'}
-                {fieldType === 'driver' && 'Motorista'}
-                {fieldType === 'destination' && 'Destino'}
-                {fieldType === 'agreement' && 'Acordo'}
+                {fieldType === 'truck' && t.truck}
+                {fieldType === 'farm' && t.farm}
+                {fieldType === 'field' && t.field}
+                {fieldType === 'variety' && t.variety}
+                {fieldType === 'driver' && t.driver}
+                {fieldType === 'destination' && t.destination}
+                {fieldType === 'agreement' && t.contract}
               </Text>
               
               <TextInput
                 style={styles.textInput}
                 value={newItemText}
                 onChangeText={setNewItemText}
-                placeholder="Digite o novo item..."
+                placeholder={t.novoItemPlaceholder}
                 placeholderTextColor="#999"
                 autoFocus={true}
               />
@@ -141,7 +143,7 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
                 disabled={!newItemText.trim() || isSaving}
               >
                 <Text style={styles.saveButtonText}>
-                  {isSaving ? 'Salvando...' : 'Adicionar'}
+                  {isSaving ? t.salvando : t.adicionar}
                 </Text>
               </TouchableOpacity>
             </View>

@@ -86,12 +86,12 @@ export default function LoadDetailsModal({ visible, item, onClose }: Props) {
             <Row label={t.deliveryLocation} value={item.deliveryLocation} icon="navigate-outline" />
             {item.otherdestination && <Row label={t.customDestination} value={item.otherdestination} icon="location-outline" />}
             
-            {/* Acordo */}
+            {/* Contrato */}
             {item.agreement && (
               <>
-                <Text style={styles.sectionTitle}>{t.agreement}</Text>
-                <Row label={t.agreementType} value={item.agreement} icon="document-text-outline" />
-                {item.otheragreement && <Row label={t.customAgreement} value={item.otheragreement} icon="document-outline" />}
+                <Text style={styles.sectionTitle}>{t.contract}</Text>
+                <Row label={t.contractType} value={item.agreement} icon="document-text-outline" />
+                {item.otheragreement && <Row label={t.customContract} value={item.otheragreement} icon="document-outline" />}
               </>
             )}
             
@@ -108,9 +108,6 @@ export default function LoadDetailsModal({ visible, item, onClose }: Props) {
             <Row label={t.createdAt} value={item.created_at ? formatSyncDate(item.created_at) : t.notAvailable} icon="time-outline" />
             <Row label={t.syncedAt} value={formatSyncDate(item.synced_at)} icon="cloud-done-outline" />
           </ScrollView>
-          <TouchableOpacity style={styles.primaryButton} onPress={onClose}>
-            <Text style={styles.primaryButtonText}>Fechar</Text>
-          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -155,19 +152,6 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontSize: 16,
     marginTop: 2,
-  },
-  primaryButton: {
-    backgroundColor: PRIMARY,
-    borderRadius: 12,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
   },
   sectionTitle: {
     color: TEXT,

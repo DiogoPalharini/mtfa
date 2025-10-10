@@ -454,7 +454,7 @@ export default function CreateTripScreen() {
                   field === 'variety' ? t.selectVariety :
                   field === 'driver' ? t.selectDriver :
                   field === 'destination' ? t.selectDestination :
-                  field === 'agreement' ? t.selectAgreement :
+                  field === 'agreement' ? t.selectContract :
                   `Selecione ${label.toLowerCase()}`)}
               </Text>
             </View>
@@ -589,8 +589,8 @@ export default function CreateTripScreen() {
                 {/* Destino */}
                 {renderDropdown(t.destination, formData.destination, dropdownData.destinations, 'destination', 'location', 'destinations')}
                 
-                {/* Acordo */}
-                {renderDropdown(t.agreement, formData.agreement, dropdownData.agreements, 'agreement', 'document-text', 'agreements')}
+                {/* Contrato */}
+                {renderDropdown(t.contract, formData.agreement, dropdownData.agreements, 'agreement', 'document-text', 'agreements')}
               </>
             )}
 
