@@ -7,6 +7,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { loginI18n } from '../i18n/login';
 import { commonI18n } from '../i18n/common';
+import LanguageSelector from '../components/LanguageSelector';
 
 const { width } = Dimensions.get('window');
 
@@ -99,6 +100,11 @@ export default function LoginScreen() {
           {/* Logo/Título */}
           <View style={styles.logoContainer}>
             <Text style={styles.appTitle}>{t.appTitle}</Text>
+          </View>
+
+          {/* Seletor de Idioma */}
+          <View style={styles.languageSelectorContainer}>
+            <LanguageSelector />
           </View>
 
           {/* Formulário */}
@@ -258,7 +264,11 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
+  },
+  languageSelectorContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
   },
   appTitle: {
     fontSize: 32,

@@ -9,6 +9,7 @@ export const loginI18n: Record<LanguageCode, Record<string, string>> = {
     loggingIn: 'Entrando...',
     usernameRequired: 'Usuário ou email é obrigatório',
     passwordRequired: 'Senha é obrigatória',
+    selectLanguage: 'Selecionar Idioma',
   },
   en: {
     appTitle: 'MTFA',
@@ -18,6 +19,7 @@ export const loginI18n: Record<LanguageCode, Record<string, string>> = {
     loggingIn: 'Logging in...',
     usernameRequired: 'Username or email is required',
     passwordRequired: 'Password is required',
+    selectLanguage: 'Select Language',
   },
   de: {
     appTitle: 'MTFA',
@@ -27,5 +29,6 @@ export const loginI18n: Record<LanguageCode, Record<string, string>> = {
     loggingIn: 'Anmeldung...',
     usernameRequired: 'Benutzername oder E-Mail ist erforderlich',
     passwordRequired: 'Passwort ist erforderlich',
+    selectLanguage: 'Sprache auswählen',
   },
 };
