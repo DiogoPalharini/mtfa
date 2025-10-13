@@ -3,16 +3,16 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SERVER_CONFIG = {
-  baseUrl: 'https://mtfa.freenetic.ch/pages/login/login.php',
+  baseUrl: 'https://mtfa.freenetic.ch/api/login.php',
   timeout: 10000, // 10 segundos
+  apiKey: 'gK7@p#R9!zW3*sV5bN8m$qX1aC4dF7hJ',
 };
 
 export interface CloudUser {
   id: number;
-  username: string;
-  email?: string;
-  name?: string;
-  created_at: string;
+  name: string;
+  email: string;
+  level: number;
   sessionId?: string;
 }
 
@@ -29,17 +29,14 @@ class CloudLoginService {
   private sessionId: string | null = null;
 
   constructor() {
-    // Criar instância do Axios para login (sem seguir redirecionamentos)
+    // Criar instância do Axios para a nova API JSON
     this.apiClient = axios.create({
       baseURL: SERVER_CONFIG.baseUrl,
       timeout: SERVER_CONFIG.timeout,
-      maxRedirects: 0, // Não seguir redirecionamentos
       validateStatus: (status) => {
-        // Aceitar status 200 e 302 como válidos
-        return status === 200 || status === 302;
+        // Aceitar todos os status para poder tratar erros adequadamente
+        return status >= 200 && status < 600;
       },
-      // Configuração para melhor captura de cookies
-      withCredentials: true,
     });
 
     // Carregar sessão salva na inicialização
@@ -159,27 +156,23 @@ class CloudLoginService {
   }
 
   // Criar resposta de login
-  private createLoginResponse(username: string, sessionId: string): LoginResponse {
-    const userData: CloudUser = {
-      id: Date.now(),
-      username: username,
-      email: username.includes('@') ? username : `${username}@mtfa.com`,
-      name: username,
-      created_at: new Date().toISOString(),
+  private createLoginResponse(userData: CloudUser, sessionId: string): LoginResponse {
+    const userWithSession: CloudUser = {
+      ...userData,
       sessionId: sessionId
     };
 
-('🔧 Criando resposta de login:', {
+    console.log('🔧 Criando resposta de login:', {
       success: true,
       sessionId: sessionId,
-      userData: userData
+      userData: userWithSession
     });
 
     return {
       success: true,
       message: 'Login bem-sucedido',
       sessionId: sessionId,
-      userData: userData
+      userData: userWithSession
     };
   }
 
@@ -203,98 +196,168 @@ class CloudLoginService {
   // Função principal de login usando Axios
   async loginUser(username: string, password: string): Promise<LoginResponse> {
     try {
-      // Criar FormData para compatibilidade com PHP $_POST
-      const formData = new FormData();
-      formData.append('email', username);
-      formData.append('password', password);
+      console.log('🚀 ===== INICIANDO PROCESSO DE LOGIN =====');
+      console.log('🔐 Enviando dados de login para nova API...');
+      console.log('🌐 URL da API:', SERVER_CONFIG.baseUrl);
+      console.log('🔑 API Key:', SERVER_CONFIG.apiKey);
+      console.log('👤 Usuário:', username);
+      console.log('🔒 Senha:', password ? '***' : 'VAZIA');
       
-      // Fazer requisição POST com Axios
-      // Debug - Enviando dados de login
+      // Criar payload JSON para a nova API
+      const loginData = {
+        email: username,
+        password: password
+      };
       
+      console.log('📤 Payload JSON criado:', JSON.stringify(loginData));
+      console.log('📋 Headers que serão enviados:', {
+        'Content-Type': 'application/json',
+        'X-API-KEY': SERVER_CONFIG.apiKey,
+      });
+      
+      // Fazer requisição POST com JSON e API key
+      console.log('🌐 Fazendo requisição POST...');
       const response: AxiosResponse = await this.apiClient.post(
         '',
-        formData,
+        loginData,
         {
           headers: {
-            'Content-Type': 'multipart/form-data',
+            'Content-Type': 'application/json',
+            'X-API-KEY': SERVER_CONFIG.apiKey,
           },
         }
       );
       
-      // Debug - Resposta completa
+      console.log('📡 ===== RESPOSTA RECEBIDA =====');
+      console.log('📊 Status Code:', response.status);
+      console.log('📋 Headers da resposta:', JSON.stringify(response.headers, null, 2));
+      console.log('📄 Dados da resposta:', JSON.stringify(response.data, null, 2));
+      console.log('🔍 Tipo dos dados:', typeof response.data);
       
-      // Verificar status da resposta
-      if (response.status === 302) {
-        // Status 302 = Login bem-sucedido (redirecionamento)
-        // Debug - Status 302 detectado
-        // Debug - All headers
+      // Verificar se a resposta é JSON válida
+      console.log('🔍 ===== ANALISANDO RESPOSTA =====');
+      console.log('✅ Status é 200?', response.status === 200);
+      console.log('✅ Tem dados?', !!response.data);
+      console.log('✅ Dados não são null?', response.data !== null);
+      console.log('✅ Dados não são undefined?', response.data !== undefined);
+      
+      if (response.status === 200 && response.data) {
+        const apiResponse = response.data;
+        console.log('📋 Estrutura da resposta:', {
+          hasSuccess: 'success' in apiResponse,
+          successValue: apiResponse.success,
+          hasUser: 'user' in apiResponse,
+          hasError: 'error' in apiResponse,
+          errorValue: apiResponse.error
+        });
         
-        const sessionId = this.extractCookieFromHeaders(response.headers);
-        
-        if (sessionId) {
-          // Cookie PHPSESSID extraído
+        if (apiResponse.success === true) {
+          // Login bem-sucedido
+          console.log('🎉 ===== LOGIN BEM-SUCEDIDO =====');
+          console.log('👤 Dados do usuário recebidos:', JSON.stringify(apiResponse.user, null, 2));
+          
+          // Gerar um sessionId baseado no usuário para consistência
+          const sessionId = this.generateUserBasedSessionId(username);
+          console.log('🔑 SessionId gerado:', sessionId);
+          
           await this.saveSession(sessionId);
-          return this.createLoginResponse(username, sessionId);
+          console.log('💾 SessionId salvo no AsyncStorage');
+          
+          // Criar resposta com dados do usuário da API
+          const loginResponse = this.createLoginResponse(apiResponse.user, sessionId);
+          console.log('📤 Resposta final criada:', JSON.stringify(loginResponse, null, 2));
+          
+          return loginResponse;
+          
         } else {
-          console.error('❌ Cookie PHPSESSID não encontrado na resposta');
-          console.error('Headers completos:', JSON.stringify(response.headers, null, 2));
-          throw new Error('Cookie de sessão não encontrado na resposta do servidor');
+          // Login falhou - usar mensagem de erro da API
+          console.log('❌ ===== LOGIN FALHOU =====');
+          console.log('🚫 success = false');
+          console.log('💬 Mensagem de erro:', apiResponse.error);
+          
+          const errorMessage = apiResponse.error || 'Erro de autenticação';
+          throw new Error(errorMessage);
         }
         
-      } else if (response.status === 200) {
-        // Status 200 - Verificar se contém Dashboard (sucesso)
-        const responseData = response.data || '';
-        const responseText = typeof responseData === 'string' ? responseData : '';
+      } else if (response.status >= 400) {
+        // Tratar erros HTTP diretamente da resposta
+        console.log('❌ ===== ERRO HTTP =====');
+        console.log('📊 Status Code:', response.status);
+        console.log('💬 Dados do erro:', response.data);
         
-        if (responseText.includes('Dashboard') || responseText.includes('dashboard')) {
-          // Debug - Status 200 com Dashboard detectado
-          // Debug - All headers
-          
-          const sessionId = this.extractCookieFromHeaders(response.headers);
-          
-          if (sessionId) {
-            // Cookie PHPSESSID extraído
-            await this.saveSession(sessionId);
-            return this.createLoginResponse(username, sessionId);
-          } else {
-            // SOLUÇÃO: Como sabemos que o login foi bem-sucedido
-            // (status 200 + Dashboard), vamos usar um cookie fixo baseado no username
-            // Cookie não encontrado, mas login foi bem-sucedido. Usando cookie baseado no usuário.
-            
-            // Gerar um cookie baseado no username para consistência
-            const userBasedSessionId = this.generateUserBasedSessionId(username);
-            // Cookie baseado no usuário gerado
-            
-            await this.saveSession(userBasedSessionId);
-            return this.createLoginResponse(username, userBasedSessionId);
-          }
-        } else {
-          throw new Error('Usuário ou senha inválidos.');
-        }
-        
+        const errorMessage = response.data?.error || `Erro do servidor (${response.status})`;
+        throw new Error(errorMessage);
       } else {
-        throw new Error(`Resposta inesperada do servidor (${response.status})`);
+        console.log('❌ ===== RESPOSTA INVÁLIDA =====');
+        console.log('📊 Status Code:', response.status);
+        console.log('📄 Dados:', response.data);
+        
+        throw new Error('Resposta inválida do servidor');
       }
       
     } catch (error) {
+      console.log('💥 ===== ERRO CAPTURADO =====');
+      console.error('❌ Erro completo:', error);
+      console.log('🔍 Tipo do erro:', typeof error);
+      console.log('🔍 É instância de Error?', error instanceof Error);
+      console.log('🔍 É AxiosError?', axios.isAxiosError(error));
+      
       if (axios.isAxiosError(error)) {
+        console.log('📡 ===== DETALHES DO ERRO AXIOS =====');
+        console.log('📊 Tem response?', !!error.response);
+        console.log('📊 Tem request?', !!error.request);
+        console.log('📊 Tem message?', !!error.message);
+        console.log('📊 Tem code?', !!error.code);
+        
         if (error.response) {
           const status = error.response.status;
-          if (status === 401) {
-            throw new Error('Usuário ou senha inválidos.');
+          const responseData = error.response.data;
+          
+          console.log('📊 Status do erro:', status);
+          console.log('📄 Dados do erro:', JSON.stringify(responseData, null, 2));
+          console.log('📋 Headers do erro:', JSON.stringify(error.response.headers, null, 2));
+          
+          if (status === 403) {
+            // Erro de API key ou licença expirada
+            console.log('🚫 Erro 403 - Acesso não autorizado');
+            const errorMessage = responseData?.error || 'Acesso não autorizado';
+            throw new Error(errorMessage);
+          } else if (status === 401) {
+            // Credenciais inválidas
+            console.log('🚫 Erro 401 - Credenciais inválidas');
+            const errorMessage = responseData?.error || 'Email ou senha inválidos';
+            throw new Error(errorMessage);
+          } else if (status === 400) {
+            // Dados inválidos
+            console.log('🚫 Erro 400 - Dados inválidos');
+            const errorMessage = responseData?.error || 'Dados de login inválidos';
+            throw new Error(errorMessage);
           } else if (status === 500) {
+            console.log('🚫 Erro 500 - Erro interno do servidor');
             throw new Error('Erro interno do servidor. Tente novamente.');
           } else {
+            console.log(`🚫 Erro ${status} - Erro do servidor`);
             throw new Error(`Erro do servidor (${status}). Tente novamente.`);
           }
         } else if (error.request) {
+          console.log('🌐 ===== ERRO DE CONEXÃO =====');
+          console.log('📡 Request feito mas sem response');
+          console.log('🔍 Detalhes do request:', error.request);
           throw new Error('Sem conexão com o servidor. Verifique sua internet.');
         } else {
+          console.log('⚙️ ===== ERRO DE CONFIGURAÇÃO =====');
+          console.log('🔧 Erro na configuração da requisição');
+          console.log('💬 Mensagem:', error.message);
           throw new Error('Erro na configuração da requisição.');
         }
       } else if (error instanceof Error) {
+        console.log('📝 ===== ERRO PADRÃO =====');
+        console.log('💬 Mensagem:', error.message);
+        console.log('📚 Stack:', error.stack);
         throw error;
       } else {
+        console.log('❓ ===== ERRO DESCONHECIDO =====');
+        console.log('🔍 Valor do erro:', error);
         throw new Error('Erro inesperado durante o login.');
       }
     }

@@ -23,21 +23,17 @@ const SUPPORTED_LANGUAGES = {
 // Função para detectar idioma do dispositivo
 function detectDeviceLanguage(): LanguageCode {
   try {
-    console.log('🔍 Iniciando detecção de idioma do dispositivo...');
-    
     // Tentar diferentes métodos para obter o idioma do dispositivo
     let deviceLocale: string | undefined;
     
     // Método 1: Localization.locale
     if (Localization.locale) {
       deviceLocale = Localization.locale;
-      console.log('✅ Idioma encontrado via Localization.locale:', deviceLocale);
     }
     
     // Método 2: Localization.locales (array de locales)
     if (!deviceLocale && Localization.locales && Localization.locales.length > 0) {
       deviceLocale = Localization.locales[0];
-      console.log('✅ Idioma encontrado via Localization.locales:', deviceLocale);
     }
     
     // Método 3: Localization.getLocales() se disponível
@@ -46,35 +42,27 @@ function detectDeviceLanguage(): LanguageCode {
         const locales = Localization.getLocales();
         if (locales && locales.length > 0) {
           deviceLocale = locales[0].languageCode;
-          console.log('✅ Idioma encontrado via Localization.getLocales():', deviceLocale);
         }
       } catch (getLocalesError) {
-        console.log('⚠️ Erro ao usar getLocales():', getLocalesError);
+        // Silenciar erro
       }
     }
     
-    console.log('🌍 Idioma final detectado:', deviceLocale);
-    
     if (!deviceLocale) {
-      console.log('⚠️ Não foi possível detectar idioma do dispositivo, usando inglês como fallback');
       return 'en';
     }
     
     // Extrair código do idioma (ex: 'pt-BR' -> 'pt', 'en-US' -> 'en')
     const languageCode = deviceLocale.split('-')[0].toLowerCase();
-    console.log('🔤 Código do idioma extraído:', languageCode);
     
     // Verificar se é um idioma suportado
     if (languageCode in SUPPORTED_LANGUAGES) {
-      console.log('✅ Idioma suportado encontrado:', languageCode);
       return languageCode as LanguageCode;
     }
     
     // Fallback para inglês se não for suportado
-    console.log('⚠️ Idioma não suportado, usando inglês como fallback');
     return 'en';
   } catch (error) {
-    console.error('❌ Erro ao detectar idioma do dispositivo:', error);
     return 'en'; // Fallback para inglês
   }
 }
@@ -89,7 +77,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       try {
         // SEMPRE detectar idioma do dispositivo primeiro
         const deviceLanguage = detectDeviceLanguage();
-        console.log('🌍 Idioma do dispositivo detectado:', deviceLanguage);
         
         // Verificar se há idioma salvo pelo usuário
         const savedLanguage = await AsyncStorage.getItem('userLanguage');
@@ -100,21 +87,17 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         const oneHourAgo = now - (60 * 60 * 1000); // 1 hora em millisegundos
         
         if (!savedLanguage || !savedTimestamp || parseInt(savedTimestamp) < oneHourAgo) {
-          console.log('🔄 Detectando idioma do dispositivo (primeira vez ou após 1 hora)');
           setLanguage(deviceLanguage);
           await AsyncStorage.setItem('userLanguage', deviceLanguage);
           await AsyncStorage.setItem('languageTimestamp', now.toString());
         } else if (savedLanguage !== deviceLanguage) {
-          console.log('📱 Idioma do dispositivo mudou. Atualizando de', savedLanguage, 'para', deviceLanguage);
           setLanguage(deviceLanguage);
           await AsyncStorage.setItem('userLanguage', deviceLanguage);
           await AsyncStorage.setItem('languageTimestamp', now.toString());
         } else {
-          console.log('📱 Usando idioma salvo (igual ao dispositivo):', savedLanguage);
           setLanguage(savedLanguage as LanguageCode);
         }
       } catch (error) {
-        console.error('❌ Erro ao inicializar idioma:', error);
         // Fallback para inglês
         setLanguage('en');
       } finally {
@@ -130,9 +113,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     try {
       setLanguage(lang);
       await AsyncStorage.setItem('userLanguage', lang);
-      console.log('💾 Idioma salvo pelo usuário:', lang);
     } catch (error) {
-      console.error('❌ Erro ao salvar idioma:', error);
+      // Silenciar erro
     }
   };
 
@@ -145,13 +127,11 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   // Função para resetar para o idioma do dispositivo
   const resetToDeviceLanguage = async () => {
     try {
-      console.log('🔄 Resetando para idioma do dispositivo...');
       const deviceLanguage = detectDeviceLanguage();
       await AsyncStorage.setItem('userLanguage', deviceLanguage);
       setLanguage(deviceLanguage);
-      console.log('✅ Resetado para idioma do dispositivo:', deviceLanguage);
     } catch (error) {
-      console.error('❌ Erro ao resetar para idioma do dispositivo:', error);
+      // Silenciar erro
     }
   };
 
