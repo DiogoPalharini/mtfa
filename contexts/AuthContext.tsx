@@ -27,46 +27,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const checkSavedSession = async () => {
     try {
       setIsLoading(true);
-('🔍 Verificando sessão salva...');
+      console.log('🔍 Verificando sessão salva...');
       
-      // Verificar se há sessão salva
-      const hasSession = await cloudLoginService.hasValidSession();
-('🔍 Tem sessão salva?', hasSession);
+      // Verificar se há usuário logado usando o novo método
+      const isLoggedIn = cloudLoginService.isLoggedIn();
+      console.log('🔍 Usuário está logado?', isLoggedIn);
       
       // Verificar se há credenciais locais também
       const hasLocalCredentials = await localAuthService.hasStoredCredentials();
-('🔍 Tem credenciais locais?', hasLocalCredentials);
+      console.log('🔍 Tem credenciais locais?', hasLocalCredentials);
       
-      if (hasSession) {
-        // Tentar validar a sessão com o servidor
-        const isValid = await validateSessionWithServer();
-('🔍 Sessão é válida?', isValid);
+      if (isLoggedIn) {
+        // Usuário está logado, obter dados do usuário
+        const currentUser = cloudLoginService.getCurrentUser();
+        console.log('🔍 Dados do usuário atual:', currentUser);
         
-        if (isValid) {
-          // Carregar dados do usuário salvos
-          const savedUser = await AsyncStorage.getItem('userData');
-('🔍 Tem dados de usuário salvos?', !!savedUser);
-          
-          if (savedUser) {
-            setUser(JSON.parse(savedUser));
-            setIsAuthenticated(true);
-('✅ Usuário autenticado via sessão válida');
-          }
-        } else {
-          // Sessão inválida, mas manter credenciais locais para login offline
-('⚠️ Sessão inválida, mas mantendo credenciais locais');
-          // Não limpar dados se há credenciais locais
-          if (!hasLocalCredentials) {
-            await clearAuthData();
-          }
+        if (currentUser) {
+          setUser(currentUser);
+          setIsAuthenticated(true);
+          console.log('✅ Usuário autenticado via dados salvos');
         }
       } else if (hasLocalCredentials) {
-        // Não há sessão online, mas há credenciais locais
-('🔍 Sem sessão online, mas há credenciais locais disponíveis');
+        // Não há usuário logado, mas há credenciais locais
+        console.log('🔍 Sem usuário logado, mas há credenciais locais disponíveis');
         // Não limpar dados, permitir login offline
       } else {
-        // Não há nem sessão nem credenciais locais
-('🔍 Sem sessão nem credenciais locais');
+        // Não há nem usuário logado nem credenciais locais
+        console.log('🔍 Sem usuário logado nem credenciais locais');
         await clearAuthData();
       }
     } catch (error) {
@@ -78,19 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const validateSessionWithServer = async (): Promise<boolean> => {
-    try {
-      // Usar o método de validação do serviço
-      return await cloudLoginService.validateSession();
-    } catch (error) {
-      console.error('Erro ao validar sessão:', error);
-      return false;
-    }
-  };
-
   const clearAuthData = async () => {
     try {
-('🧹 Limpando dados de autenticação...');
+      console.log('🧹 Limpando dados de autenticação...');
       await AsyncStorage.removeItem('userData');
       await cloudLoginService.logout();
       // NÃO limpar credenciais locais aqui - elas devem persistir para login offline
@@ -216,13 +193,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkSession = async (): Promise<boolean> => {
     try {
-      const isValid = await validateSessionWithServer();
+      // Usar o novo método para verificar se o usuário está logado
+      const isLoggedIn = cloudLoginService.isLoggedIn();
       
-      if (!isValid) {
+      if (!isLoggedIn) {
         await clearAuthData();
       }
       
-      return isValid;
+      return isLoggedIn;
     } catch (error) {
       console.error('Erro ao verificar sessão:', error);
       await clearAuthData();
