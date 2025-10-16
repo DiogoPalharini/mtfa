@@ -9,7 +9,8 @@ const TEXT_ON_PRIMARY = '#FFFFFF';
 const TEXT = '#212529';
 const TEXT_SECONDARY = '#6C757D';
 
-const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight ?? 0 : 0;
+const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0;
+const HEADER_PADDING_TOP = STATUS_BAR_HEIGHT + 20; // Aumentado de 12 para 20
 
 interface AppHeaderProps {
   projectName?: string;
@@ -18,6 +19,7 @@ interface AppHeaderProps {
   isSyncing?: boolean;
   onSyncPress?: () => void;
   onLogoutPress?: () => void;
+  onBackPress?: () => void;
 }
 
 export default function AppHeader({ 
@@ -26,7 +28,8 @@ export default function AppHeader({
   showSync = false, 
   isSyncing = false, 
   onSyncPress,
-  onLogoutPress
+  onLogoutPress,
+  onBackPress
 }: AppHeaderProps) {
   const { language, setLanguage } = useLanguage();
   const [openLangMenu, setOpenLangMenu] = useState(false);
@@ -54,7 +57,10 @@ export default function AppHeader({
       <View style={styles.header}>
         <View style={styles.left}>
           {showBack && (
-            <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+            <TouchableOpacity 
+              onPress={onBackPress || (() => router.back())} 
+              activeOpacity={0.8}
+            >
               <Ionicons name="arrow-back" size={24} color={TEXT_ON_PRIMARY} />
             </TouchableOpacity>
           )}
@@ -118,7 +124,7 @@ export default function AppHeader({
 const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: PRIMARY,
-    paddingTop: STATUS_BAR_HEIGHT + 12,
+    paddingTop: HEADER_PADDING_TOP,
     position: 'relative',
     zIndex: 1000,
     elevation: 10,

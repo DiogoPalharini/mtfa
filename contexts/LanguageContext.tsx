@@ -75,29 +75,28 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeLanguage = async () => {
       try {
-        // SEMPRE detectar idioma do dispositivo primeiro
+        // Detectar idioma do dispositivo
         const deviceLanguage = detectDeviceLanguage();
+        console.log('🌍 Idioma do dispositivo detectado:', deviceLanguage);
         
         // Verificar se há idioma salvo pelo usuário
         const savedLanguage = await AsyncStorage.getItem('userLanguage');
-        const savedTimestamp = await AsyncStorage.getItem('languageTimestamp');
+        console.log('💾 Idioma salvo pelo usuário:', savedLanguage);
         
-        // Se não há idioma salvo ou se passou mais de 1 hora desde a última detecção
-        const now = Date.now();
-        const oneHourAgo = now - (60 * 60 * 1000); // 1 hora em millisegundos
-        
-        if (!savedLanguage || !savedTimestamp || parseInt(savedTimestamp) < oneHourAgo) {
-          setLanguage(deviceLanguage);
-          await AsyncStorage.setItem('userLanguage', deviceLanguage);
-          await AsyncStorage.setItem('languageTimestamp', now.toString());
-        } else if (savedLanguage !== deviceLanguage) {
-          setLanguage(deviceLanguage);
-          await AsyncStorage.setItem('userLanguage', deviceLanguage);
-          await AsyncStorage.setItem('languageTimestamp', now.toString());
-        } else {
+        // SEMPRE usar o idioma do dispositivo como padrão
+        // Se o usuário mudou manualmente, usar a preferência salva
+        if (savedLanguage && savedLanguage !== deviceLanguage) {
+          // Usuário mudou manualmente para um idioma diferente do dispositivo
+          console.log('👤 Usando idioma escolhido pelo usuário:', savedLanguage);
           setLanguage(savedLanguage as LanguageCode);
+        } else {
+          // Usar idioma do dispositivo (primeira vez ou dispositivo mudou)
+          console.log('📱 Usando idioma do dispositivo:', deviceLanguage);
+          setLanguage(deviceLanguage);
+          await AsyncStorage.setItem('userLanguage', deviceLanguage);
         }
       } catch (error) {
+        console.error('❌ Erro ao inicializar idioma:', error);
         // Fallback para inglês
         setLanguage('en');
       } finally {
@@ -128,8 +127,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const resetToDeviceLanguage = async () => {
     try {
       const deviceLanguage = detectDeviceLanguage();
-      await AsyncStorage.setItem('userLanguage', deviceLanguage);
       setLanguage(deviceLanguage);
+      await AsyncStorage.setItem('userLanguage', deviceLanguage);
     } catch (error) {
       // Silenciar erro
     }

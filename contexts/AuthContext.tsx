@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { cloudLoginService, CloudUser } from '../services/cloudLogin';
+import { hybridAuthService, CloudUser } from '../services/HybridAuthService';
 import { localAuthService } from '../services/localAuthService';
+import { useErrorTranslations } from '../hooks/useErrorTranslations';
 
 interface AuthContextValue {
   user: CloudUser | null;
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CloudUser | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const { t } = useErrorTranslations();
 
   // Verificar sessão salva na inicialização
   useEffect(() => {
@@ -29,9 +31,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       console.log('🔍 Verificando sessão salva...');
       
-      // Verificar se há usuário logado usando o novo método
-      const isLoggedIn = cloudLoginService.isLoggedIn();
-      console.log('🔍 Usuário está logado?', isLoggedIn);
+      // Verificar se há usuário logado usando o sistema híbrido
+      const isLoggedIn = hybridAuthService.isLoggedIn();
+      console.log('🔍 Usuário está logado (híbrido)?', isLoggedIn);
       
       // Verificar se há credenciais locais também
       const hasLocalCredentials = await localAuthService.hasStoredCredentials();
@@ -39,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (isLoggedIn) {
         // Usuário está logado, obter dados do usuário
-        const currentUser = cloudLoginService.getCurrentUser();
-        console.log('🔍 Dados do usuário atual:', currentUser);
+        const currentUser = hybridAuthService.getCurrentUser();
+        console.log('🔍 Dados do usuário atual (híbrido):', currentUser);
         
         if (currentUser) {
           setUser(currentUser);
@@ -69,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🧹 Limpando dados de autenticação...');
       await AsyncStorage.removeItem('userData');
-      await cloudLoginService.logout();
+      await hybridAuthService.logout();
       // NÃO limpar credenciais locais aqui - elas devem persistir para login offline
       // await localAuthService.clearCredentials(); // Removido
       setUser(null);
@@ -86,38 +88,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
 ('🔐 Iniciando processo de login para:', username);
       
-      // Primeiro, tentar login online
+      // Usar sistema híbrido para login
       try {
-        const onlineResult = await cloudLoginService.loginUser(username, password);
+        const hybridResult = await hybridAuthService.login(username, password);
         
-('🌐 Resultado do login online:', {
-          success: onlineResult.success,
-          hasUserData: !!onlineResult.userData,
-          hasSessionId: !!onlineResult.sessionId,
-          userData: onlineResult.userData,
-          sessionId: onlineResult.sessionId
+        console.log('🌐 Resultado do login híbrido:', {
+          success: hybridResult.success,
+          hasUser: !!hybridResult.user,
+          hasCookie: !!hybridResult.sessionCookie,
+          user: hybridResult.user
         });
         
-        // Verificar se o login online foi bem-sucedido
-        if (onlineResult.success && onlineResult.userData && onlineResult.sessionId) {
-          // Login online bem-sucedido - salvar credenciais localmente
-('✅ Login online bem-sucedido, salvando credenciais...');
+        // Verificar se o login híbrido foi bem-sucedido
+        if (hybridResult.success && hybridResult.user && hybridResult.sessionCookie) {
+          // Login híbrido bem-sucedido - salvar credenciais localmente
+          console.log('✅ Login híbrido bem-sucedido, salvando credenciais...');
           
-          const credentialsSaved = await localAuthService.saveCredentials(username, password, onlineResult.sessionId);
-('💾 Credenciais salvas:', credentialsSaved);
+          const credentialsSaved = await localAuthService.saveCredentials(username, password, 'session_id');
+          console.log('💾 Credenciais salvas:', credentialsSaved);
           
           // Salvar dados do usuário
-          await AsyncStorage.setItem('userData', JSON.stringify(onlineResult.userData));
-          setUser(onlineResult.userData);
+          await AsyncStorage.setItem('userData', JSON.stringify(hybridResult.user));
+          setUser(hybridResult.user);
           setIsAuthenticated(true);
           
-('🎉 Login online concluído com sucesso!');
-          return { success: true, message: 'Login realizado com sucesso!' };
+          console.log('🎉 Login híbrido concluído com sucesso!');
+          return { success: true, message: t('loginSuccess') };
         } else {
-('❌ Login online falhou - condições não atendidas:', {
-            success: onlineResult.success,
-            hasUserData: !!onlineResult.userData,
-            hasSessionId: !!onlineResult.sessionId
+          console.log('❌ Login híbrido falhou - condições não atendidas:', {
+            success: hybridResult.success,
+            hasUser: !!hybridResult.user,
+            hasCookie: !!hybridResult.sessionCookie
           });
           // Login online falhou - tentar login offline
           const offlineResult = await localAuthService.validateOfflineLogin(username, password);
@@ -136,14 +137,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(userData);
             setIsAuthenticated(true);
             
-            return { success: true, message: 'Login offline realizado com sucesso!' };
+            return { success: true, message: t('loginSuccess') };
           } else {
-            return { success: false, message: offlineResult.message };
+            return { success: false, message: t('loginFailed') };
           }
         }
-      } catch (onlineError) {
-('❌ Erro no login online:', onlineError);
-        // Login online falhou, tentando offline
+      } catch (hybridError) {
+        console.log('❌ Erro no login híbrido:', hybridError);
+        // Login híbrido falhou, tentando offline
         
         // Login online falhou - tentar login offline
         const offlineResult = await localAuthService.validateOfflineLogin(username, password);
@@ -162,14 +163,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(userData);
           setIsAuthenticated(true);
           
-          return { success: true, message: 'Login offline realizado com sucesso!' };
+          return { success: true, message: t('loginSuccess') };
         } else {
-          return { success: false, message: offlineResult.message };
+          return { success: false, message: hybridError instanceof Error ? hybridError.message : t('loginFailed') };
         }
       }
     } catch (error) {
       console.error('❌ Erro geral no login:', error);
-      return { success: false, message: 'Falha na autenticação. Verifique suas credenciais.' };
+      return { success: false, message: t('loginFailed') };
     } finally {
       setIsLoading(false);
     }
@@ -193,8 +194,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkSession = async (): Promise<boolean> => {
     try {
-      // Usar o novo método para verificar se o usuário está logado
-      const isLoggedIn = cloudLoginService.isLoggedIn();
+      // Usar o sistema híbrido para verificar se o usuário está logado
+      const isLoggedIn = hybridAuthService.isLoggedIn();
       
       if (!isLoggedIn) {
         await clearAuthData();

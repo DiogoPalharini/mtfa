@@ -1,6 +1,8 @@
-// Serviço para adicionar carregamento de caminhão com autenticação por cookie
+// Serviço para adicionar carregamento de caminhão com autenticação híbrida
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { hybridAuthService } from './HybridAuthService';
+import { getTranslatedMessage, ErrorMessages } from './translations';
+import { LanguageCode } from '../contexts/LanguageContext';
 
 // Interface para os dados do formulário conforme especificação do endpoint
 export interface TruckLoadFormData {
@@ -43,15 +45,14 @@ class AddTruckService {
     // Interceptor para adicionar cookie PHPSESSID automaticamente
     this.apiClient.interceptors.request.use(async (config) => {
       try {
-        // Ler cookie PHPSESSID do AsyncStorage
-        const sessionId = await AsyncStorage.getItem('PHPSESSID');
-        // Debug - SessionId do AsyncStorage
+        // Obter cookie do serviço híbrido
+        const sessionCookie = hybridAuthService.getSessionCookie();
         
-        if (sessionId) {
-          config.headers.Cookie = `PHPSESSID=${sessionId}`;
-          // Cookie adicionado ao header
+        if (sessionCookie) {
+          config.headers.Cookie = sessionCookie;
+          console.log('🍪 Cookie híbrido adicionado ao header');
         } else {
-          console.error('❌ Nenhum cookie PHPSESSID encontrado no AsyncStorage');
+          console.error('❌ Nenhum cookie PHPSESSID encontrado no serviço híbrido');
         }
       } catch (error) {
         console.error('Erro ao carregar cookie de sessão:', error);
@@ -75,6 +76,26 @@ class AddTruckService {
         throw error;
       }
     );
+  }
+
+  // Obter idioma atual do AsyncStorage
+  private async getCurrentLanguage(): Promise<LanguageCode> {
+    try {
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+      const savedLanguage = await AsyncStorage.getItem('userLanguage');
+      if (savedLanguage && ['pt', 'en', 'de'].includes(savedLanguage)) {
+        return savedLanguage as LanguageCode;
+      }
+    } catch (error) {
+      // Silenciar erro, usar inglês como padrão
+    }
+    return 'en';
+  }
+
+  // Obter mensagem traduzida
+  private async getMessage(key: keyof ErrorMessages): Promise<string> {
+    const language = await this.getCurrentLanguage();
+    return getTranslatedMessage(key, language);
   }
 
   /**
@@ -126,7 +147,7 @@ class AddTruckService {
         // Status 302 = Redirecionamento após sucesso
         return {
           success: true,
-          message: 'Carregamento adicionado com sucesso!'
+          message: await this.getMessage('credentialsSaved')
         };
       } else if (response.status === 200) {
         // Status 200 - Verificar se contém o formulário (indica que os dados foram processados)
@@ -137,23 +158,23 @@ class AddTruckService {
           // Se contém o formulário, significa que os dados foram processados com sucesso
           return {
             success: true,
-            message: 'Carregamento adicionado com sucesso!'
+            message: await this.getMessage('credentialsSaved')
           };
         } else {
           console.error('❌ Status 200 mas conteúdo inesperado');
-          throw new Error(`Operação falhou. Status: ${response.status}. Conteúdo inesperado.`);
+          throw new Error(await this.getMessage('serverError'));
         }
       } else {
         // Qualquer outro status indica falha
         console.error('❌ Status inesperado:', response.status);
-        throw new Error(`Operação falhou. Status: ${response.status}. Sessão pode ter expirado.`);
+        throw new Error(await this.getMessage('sessionExpired'));
       }
 
     } catch (error) {
       if (error instanceof Error) {
         throw error;
       } else {
-        throw new Error('Erro inesperado ao adicionar carregamento.');
+        throw new Error(await this.getMessage('unknownError'));
       }
     }
   }

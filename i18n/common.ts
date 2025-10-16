@@ -66,6 +66,7 @@ export const commonI18n: Record<LanguageCode, Record<string, string>> = {
     ok: 'OK',
     // Error messages
     unexpectedError: 'Erro inesperado ao salvar carregamento.',
+    invalidValue: 'Por favor, digite um valor válido.',
   },
   en: {
     notFound: 'Page not found',
@@ -132,6 +133,7 @@ export const commonI18n: Record<LanguageCode, Record<string, string>> = {
     ok: 'OK',
     // Error messages
     unexpectedError: 'Unexpected error while saving load.',
+    invalidValue: 'Please enter a valid value.',
   },
   de: {
     notFound: 'Seite nicht gefunden',
@@ -198,5 +200,6 @@ export const commonI18n: Record<LanguageCode, Record<string, string>> = {
     ok: 'OK',
     // Error messages
     unexpectedError: 'Unerwarteter Fehler beim Speichern der Ladung.',
+    invalidValue: 'Bitte geben Sie einen gültigen Wert ein.',
   },
 };

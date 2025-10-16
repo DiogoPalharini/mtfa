@@ -44,7 +44,7 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
 
   const handleSaveItem = async () => {
     if (!newItemText.trim()) {
-      Alert.alert(commonT.error, 'Por favor, digite um valor válido.');
+      Alert.alert(commonT.error, commonT.invalidValue);
       return;
     }
 
@@ -125,7 +125,6 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
                 onChangeText={setNewItemText}
                 placeholder={t.novoItemPlaceholder}
                 placeholderTextColor="#999"
-                autoFocus={true}
               />
             </View>
 

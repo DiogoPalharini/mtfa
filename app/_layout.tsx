@@ -5,8 +5,8 @@ import { AuthProvider } from '../contexts/AuthContext';
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <LanguageProvider>
+    <LanguageProvider>
+      <AuthProvider>
         <StatusBar style="dark" />
         <Stack
           screenOptions={{
@@ -18,7 +18,7 @@ export default function RootLayout() {
           <Stack.Screen name="home" options={{ title: 'Home' }} />
           <Stack.Screen name="create" options={{ title: 'Registrar Viagem' }} />
         </Stack>
-      </LanguageProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }

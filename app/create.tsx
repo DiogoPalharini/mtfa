@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, Animated, Dimensions, Modal, Alert } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, Animated, Dimensions, Modal, Alert, KeyboardAvoidingView } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
@@ -95,8 +95,8 @@ export default function CreateTripScreen() {
   
   const now = useMemo(() => new Date(), []);
   const [formData, setFormData] = useState<FormData>({
-    reg_date: now.toLocaleDateString('pt-BR'),
-    reg_time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    reg_date: now.toLocaleDateString(language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-DE' : 'en-US'),
+    reg_time: now.toLocaleTimeString(language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     truck: '',
     othertruck: '',
     farm: '',
@@ -115,6 +115,8 @@ export default function CreateTripScreen() {
   });
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [isNotesActive, setIsNotesActive] = useState(false);
   const [dropdownData, setDropdownData] = useState<DropdownData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -139,6 +141,9 @@ export default function CreateTripScreen() {
   const hourRef = useRef<ScrollView | null>(null);
   const minuteRef = useRef<ScrollView | null>(null);
   const secondRef = useRef<ScrollView | null>(null);
+
+  // ✅ [CORREÇÃO] Ref para o campo de anotações para controlar o foco
+  const notesInputRef = useRef<TextInput>(null);
 
   const scrollToCenter = (ref: React.RefObject<ScrollView | null>, index: number, listLength: number) => {
     const visibleCount = 5; // aproximadamente
@@ -180,8 +185,8 @@ export default function CreateTripScreen() {
         const currentDate = new Date();
         setFormData(prev => ({
           ...prev,
-          reg_date: currentDate.toLocaleDateString('pt-BR'),
-          reg_time: currentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          reg_date: currentDate.toLocaleDateString(language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-DE' : 'en-US'),
+          reg_time: currentDate.toLocaleTimeString(language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         }));
       } catch (error) {
         // Erro ao carregar dados
@@ -192,6 +197,22 @@ export default function CreateTripScreen() {
 
     loadData();
   }, []);
+
+  // ✅ [CORREÇÃO] Removido useEffect que causava foco automático
+  // useEffect(() => {
+  //     // Debug logs
+  //     console.log('🔍 useEffect triggered:', { contractJustSelected, activeDropdown, field: 'agreement' });
+  //     
+  //     // Só focar se o contrato foi selecionado E não há dropdown ativo
+  //     if (contractJustSelected && !activeDropdown) {
+  //         console.log('✅ Focando no campo notes');
+  //         const timer = setTimeout(() => {
+  //             notesInputRef.current?.focus();
+  //             setContractJustSelected(false); // Resetar o flag
+  //         }, 200);
+  //         return () => clearTimeout(timer);
+  //     }
+  // }, [contractJustSelected, activeDropdown]);
 
   const formatTwo = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
@@ -205,20 +226,35 @@ export default function CreateTripScreen() {
     setFormData(prev => ({ ...prev, reg_time: timeString }));
     setTimeModalVisible(false);
   };
+  
+  // ✨ [MELHORIA] Função "Usar Agora" agora fecha o modal
   const useNowDate = () => {
     const d = new Date();
-    setSelectedDay(d.getDate());
-    setSelectedMonth(d.getMonth() + 1);
-    setSelectedYear(d.getFullYear());
-    setFormData(prev => ({ ...prev, reg_date: d.toLocaleDateString('pt-BR') }));
+    const day = d.getDate();
+    const month = d.getMonth() + 1;
+    const year = d.getFullYear();
+    setSelectedDay(day);
+    setSelectedMonth(month);
+    setSelectedYear(year);
+    const dateString = `${formatTwo(day)}/${formatTwo(month)}/${year}`;
+    setFormData(prev => ({ ...prev, reg_date: dateString }));
+    setDateModalVisible(false);
   };
+  
+  // ✨ [MELHORIA] Função "Usar Agora" agora fecha o modal
   const useNowTime = () => {
     const d = new Date();
-    setSelectedHour(d.getHours());
-    setSelectedMinute(d.getMinutes());
-    setSelectedSecond(d.getSeconds());
-    setFormData(prev => ({ ...prev, reg_time: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }));
+    const hour = d.getHours();
+    const minute = d.getMinutes();
+    const second = d.getSeconds();
+    setSelectedHour(hour);
+    setSelectedMinute(minute);
+    setSelectedSecond(second);
+    const timeString = `${formatTwo(hour)}:${formatTwo(minute)}:${formatTwo(second)}`;
+    setFormData(prev => ({ ...prev, reg_time: timeString }));
+    setTimeModalVisible(false);
   };
+
 
   const closeAllDropdowns = () => {
     setActiveDropdown(null);
@@ -226,14 +262,18 @@ export default function CreateTripScreen() {
 
   // Função para converter data do formato DD/MM/AAAA para AAAA-MM-DD
   const formatDateForBackend = (dateString: string): string => {
-    const [day, month, year] = dateString.split('/');
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    const parts = dateString.split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return dateString; // Fallback para o formato original se não for o esperado
   };
 
   // Função para converter hora do formato HH:MM:SS para HH:mm:ss (garantir formato correto)
   const formatTimeForBackend = (timeString: string): string => {
     // Remove espaços e garante formato HH:mm:ss
-    return timeString.replace(/\s/g, '').replace(/:/g, ':');
+    return timeString.replace(/\s/g, '');
   };
 
   // Função para processar campos dropdown com lógica "other"
@@ -271,6 +311,28 @@ export default function CreateTripScreen() {
         return;
       }
 
+      // ✅ [VALIDAÇÃO] Verificar se todos os campos obrigatórios estão preenchidos
+      const requiredFields = [
+        { field: 'truck', label: t.truck },
+        { field: 'farm', label: t.farm },
+        { field: 'field', label: t.field },
+        { field: 'variety', label: t.variety },
+        { field: 'driver', label: t.driver },
+        { field: 'destination', label: t.destination }
+        // contract e notes são opcionais
+      ];
+
+      const emptyFields = requiredFields.filter(({ field }) => !formData[field as keyof FormData]);
+      
+      if (emptyFields.length > 0) {
+        const fieldNames = emptyFields.map(({ label }) => label).join(', ');
+        Alert.alert(
+          commonT.error,
+          `${t.pleaseFillAllFields}: ${fieldNames}`,
+          [{ text: commonT.ok }]
+        );
+        return;
+      }
 
       // Processar campos dropdown com lógica "other"
       const truckData = processDropdownField(formData.truck, formData.othertruck, dropdownData.trucks);
@@ -283,7 +345,6 @@ export default function CreateTripScreen() {
 
 
       // SALVAR AUTOMATICAMENTE TODOS OS ITENS DOS SELECTS USADOS
-      
       const itemsToSave = [
         // Salvar valores principais se não forem "other" (usando tipos singulares)
         { type: 'truck', value: truckData.mainField !== 'other' ? truckData.mainField : null },
@@ -305,19 +366,15 @@ export default function CreateTripScreen() {
       ];
 
       // Filtrar apenas valores válidos e salvar
-      
       for (const item of itemsToSave) {
         if (item.value && item.value.trim()) {
-          const saved = await syncService.saveDropdownData(item.type, item.value.trim());
-        } else {
+          await syncService.saveDropdownData(item.type, item.value.trim());
         }
       }
-      
 
       // ATUALIZAR ESTADO LOCAL DOS DROPDOWNS COM OS NOVOS ITENS
       const updatedDropdownData = { ...dropdownData };
       
-      // Adicionar novos itens aos arrays locais se não existirem
       const addToArray = (type: keyof DropdownData, value: string) => {
         if (value && updatedDropdownData[type] && Array.isArray(updatedDropdownData[type])) {
           if (!updatedDropdownData[type].includes(value)) {
@@ -326,10 +383,10 @@ export default function CreateTripScreen() {
         }
       };
 
-      // Adicionar todos os itens salvos ao estado local
       for (const item of itemsToSave) {
         if (item.value && item.value.trim()) {
-          addToArray(item.type as keyof DropdownData, item.value.trim());
+            const pluralType = `${item.type}s` as keyof DropdownData;
+            addToArray(pluralType, item.value.trim());
         }
       }
       
@@ -337,8 +394,8 @@ export default function CreateTripScreen() {
 
       // Converter dados do formulário para o formato esperado pelo serviço
       const truckLoadData: TruckLoadFormData = {
-        reg_date: formatDateForBackend(formData.reg_date), // Converter para AAAA-MM-DD
-        reg_time: formatTimeForBackend(formData.reg_time), // Garantir formato HH:mm:ss
+        reg_date: formatDateForBackend(formData.reg_date),
+        reg_time: formatTimeForBackend(formData.reg_time),
         truck: truckData.mainField,
         othertruck: truckData.otherField,
         farm: farmData.mainField,
@@ -356,14 +413,7 @@ export default function CreateTripScreen() {
         otheragreement: agreementData.otherField,
       };
 
-      // Salvar novos valores de dropdown no banco local
-      if (truckData.otherField) await syncService.saveDropdownData('truck', truckData.otherField);
-      if (farmData.otherField) await syncService.saveDropdownData('farm', farmData.otherField);
-      if (fieldData.otherField) await syncService.saveDropdownData('field', fieldData.otherField);
-      if (varietyData.otherField) await syncService.saveDropdownData('variety', varietyData.otherField);
-      if (driverData.otherField) await syncService.saveDropdownData('driver', driverData.otherField);
-      if (destinationData.otherField) await syncService.saveDropdownData('destination', destinationData.otherField);
-      if (agreementData.otherField) await syncService.saveDropdownData('agreement', agreementData.otherField);
+      // 🧹 [LIMPEZA] Bloco de código redundante removido. A lógica acima já salva todos os itens necessários.
 
       // Usar o serviço de sincronização para salvar localmente e tentar sincronizar
       const result = await syncService.saveTruckLoad(truckLoadData);
@@ -377,7 +427,7 @@ export default function CreateTripScreen() {
               text: commonT.ok,
               onPress: () => {
                 // Redirecionar para home após sucesso
-                router.push('/home');
+                router.replace('/home');
               }
             }
           ]
@@ -386,10 +436,9 @@ export default function CreateTripScreen() {
         Alert.alert(commonT.error, result.message);
       }
     } catch (error) {
-      // Erro ao salvar carregamento
       Alert.alert(
         commonT.error,
-        error instanceof Error ? error.message : commonT.unexpectedError,
+        commonT.unexpectedError,
         [{ text: commonT.ok }]
       );
     } finally {
@@ -509,6 +558,7 @@ export default function CreateTripScreen() {
                     style={styles.dropdownOption}
                     onPress={() => {
                       setFormData(prev => ({ ...prev, [field]: option }));
+                      // ⚡ [MELHORIA] Removido setTimeout para resposta imediata
                       setActiveDropdown(null);
                     }}
                     activeOpacity={0.7}
@@ -548,17 +598,23 @@ export default function CreateTripScreen() {
 
   return (
     <ProtectedRoute>
-      <View style={styles.container}>
+      <KeyboardAvoidingView 
+        style={styles.container} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      >
         <AppHeader projectName="MTFA" showBack onLogoutPress={handleLogout} />
 
-      {/* Conteúdo */}
-      <ScrollView 
-        style={styles.content} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-      >
+        {/* Conteúdo */}
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.content} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
         {loading ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>{t.carregando}</Text>
@@ -571,25 +627,12 @@ export default function CreateTripScreen() {
             
             {dropdownData && (
               <>
-                {/* Caminhão */}
                 {renderDropdown(t.truck, formData.truck, dropdownData.trucks, 'truck', 'car', 'trucks')}
-                
-                {/* Fazenda */}
                 {renderDropdown(t.farm, formData.farm, dropdownData.farms, 'farm', 'business', 'farms')}
-                
-                {/* Campo/Talhão */}
                 {renderDropdown(t.field, formData.field, dropdownData.fields, 'field', 'leaf', 'fields')}
-                
-                {/* Variedade */}
                 {renderDropdown(t.variety, formData.variety, dropdownData.varieties, 'variety', 'nutrition', 'varieties')}
-                
-                {/* Motorista */}
                 {renderDropdown(t.driver, formData.driver, dropdownData.drivers, 'driver', 'person', 'drivers')}
-                
-                {/* Destino */}
                 {renderDropdown(t.destination, formData.destination, dropdownData.destinations, 'destination', 'location', 'destinations')}
-                
-                {/* Contrato */}
                 {renderDropdown(t.contract, formData.agreement, dropdownData.agreements, 'agreement', 'document-text', 'agreements')}
               </>
             )}
@@ -597,16 +640,42 @@ export default function CreateTripScreen() {
             {/* Campo de anotações */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>{t.notes}</Text>
-              <TextInput
-                style={[styles.textInput, styles.textArea]}
-                value={formData.dnote}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, dnote: text }))}
-                placeholder={t.notesPlaceholder}
-                placeholderTextColor={TEXT_SECONDARY}
-                multiline
-                numberOfLines={4}
-                textAlignVertical="top"
-              />
+              <TouchableOpacity 
+                onPress={() => {
+                  // Ativar o campo notes quando clicado
+                  setIsNotesActive(true);
+                  // Focar no campo após um pequeno delay
+                  setTimeout(() => {
+                    notesInputRef.current?.focus();
+                  }, 100);
+                }}
+                activeOpacity={0.7}
+                style={styles.notesTouchable}
+              >
+                <TextInput
+                  ref={notesInputRef}
+                  style={[styles.textInput, styles.textArea]}
+                  value={formData.dnote}
+                  onChangeText={(text) => setFormData(prev => ({ ...prev, dnote: text }))}
+                  placeholder={t.notesPlaceholder}
+                  placeholderTextColor={TEXT_SECONDARY}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  editable={isNotesActive}
+                  autoFocus={false}
+                  blurOnSubmit={false}
+                  pointerEvents={isNotesActive ? 'auto' : 'none'}
+                  onFocus={() => {
+                    // Scroll para o campo quando ganhar foco
+                    setTimeout(() => {
+                      if (scrollViewRef.current) {
+                        scrollViewRef.current.scrollToEnd({ animated: true });
+                      }
+                    }, 300);
+                  }}
+                />
+              </TouchableOpacity>
             </View>
 
             <TouchableOpacity 
@@ -623,115 +692,115 @@ export default function CreateTripScreen() {
         )}
       </ScrollView>
 
-      {/* Modal de Data */}
-      <Modal visible={dateModalVisible} transparent animationType="fade" onRequestClose={() => setDateModalVisible(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t.selectDate}</Text>
-              <TouchableOpacity onPress={() => setDateModalVisible(false)}>
-                <Ionicons name="close" size={22} color={TEXT} />
-              </TouchableOpacity>
+        {/* Modal de Data */}
+        <Modal visible={dateModalVisible} transparent animationType="fade" onRequestClose={() => setDateModalVisible(false)}>
+            <View style={styles.backdrop}>
+                <View style={styles.modalCard}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>{t.selectDate}</Text>
+                        <TouchableOpacity onPress={() => setDateModalVisible(false)}>
+                            <Ionicons name="close" size={22} color={TEXT} />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.modalContentRow}>
+                        <View style={styles.modalColumn}>
+                            <Text style={styles.modalLabel}>{t.day}</Text>
+                            <ScrollView ref={dayRef} style={styles.modalList} showsVerticalScrollIndicator>
+                                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                                    <TouchableOpacity key={d} style={[styles.modalOption, selectedDay === d && styles.modalOptionActive]} onPress={() => setSelectedDay(d)}>
+                                        <Text style={[styles.modalOptionText, selectedDay === d && styles.modalOptionTextActive]}>{formatTwo(d)}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                        <View style={styles.modalColumn}>
+                            <Text style={styles.modalLabel}>{t.month}</Text>
+                            <ScrollView ref={monthRef} style={styles.modalList} showsVerticalScrollIndicator>
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                    <TouchableOpacity key={m} style={[styles.modalOption, selectedMonth === m && styles.modalOptionActive]} onPress={() => setSelectedMonth(m)}>
+                                        <Text style={[styles.modalOptionText, selectedMonth === m && styles.modalOptionTextActive]}>{formatTwo(m)}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                        <View style={styles.modalColumn}>
+                            <Text style={styles.modalLabel}>{t.year}</Text>
+                            <ScrollView ref={yearRef} style={styles.modalList} showsVerticalScrollIndicator>
+                                {Array.from({ length: 7 }, (_, i) => now.getFullYear() - 3 + i).map(y => (
+                                    <TouchableOpacity key={y} style={[styles.modalOption, selectedYear === y && styles.modalOptionActive]} onPress={() => setSelectedYear(y)}>
+                                        <Text style={[styles.modalOptionText, selectedYear === y && styles.modalOptionTextActive]}>{y}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    </View>
+                    <View style={styles.modalButtonsRow}>
+                        <TouchableOpacity style={styles.secondaryButton} onPress={useNowDate}>
+                            <Text style={styles.secondaryButtonText}>{t.useNow}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.primaryButton} onPress={applyDate}>
+                            <Text style={styles.primaryButtonText}>{t.apply}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </View>
-            <View style={styles.modalContentRow}>
-              <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>{t.day}</Text>
-                <ScrollView ref={dayRef} style={styles.modalList} showsVerticalScrollIndicator>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
-                    <TouchableOpacity key={d} style={[styles.modalOption, selectedDay === d && styles.modalOptionActive]} onPress={() => setSelectedDay(d)}>
-                      <Text style={[styles.modalOptionText, selectedDay === d && styles.modalOptionTextActive]}>{formatTwo(d)}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-              <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>{t.month}</Text>
-                <ScrollView ref={monthRef} style={styles.modalList} showsVerticalScrollIndicator>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                    <TouchableOpacity key={m} style={[styles.modalOption, selectedMonth === m && styles.modalOptionActive]} onPress={() => setSelectedMonth(m)}>
-                      <Text style={[styles.modalOptionText, selectedMonth === m && styles.modalOptionTextActive]}>{formatTwo(m)}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-              <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>{t.year}</Text>
-                <ScrollView ref={yearRef} style={styles.modalList} showsVerticalScrollIndicator>
-                  {Array.from({ length: 7 }, (_, i) => now.getFullYear() - 3 + i).map(y => (
-                    <TouchableOpacity key={y} style={[styles.modalOption, selectedYear === y && styles.modalOptionActive]} onPress={() => setSelectedYear(y)}>
-                      <Text style={[styles.modalOptionText, selectedYear === y && styles.modalOptionTextActive]}>{y}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={useNowDate}>
-                <Text style={styles.secondaryButtonText}>{t.useNow}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButton} onPress={applyDate}>
-                <Text style={styles.primaryButtonText}>{t.apply}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      {/* Modal de Hora */}
-      <Modal visible={timeModalVisible} transparent animationType="fade" onRequestClose={() => setTimeModalVisible(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t.selectTime}</Text>
-              <TouchableOpacity onPress={() => setTimeModalVisible(false)}>
-                <Ionicons name="close" size={22} color={TEXT} />
-              </TouchableOpacity>
+        {/* Modal de Hora */}
+        <Modal visible={timeModalVisible} transparent animationType="fade" onRequestClose={() => setTimeModalVisible(false)}>
+            <View style={styles.backdrop}>
+                <View style={styles.modalCard}>
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>{t.selectTime}</Text>
+                        <TouchableOpacity onPress={() => setTimeModalVisible(false)}>
+                            <Ionicons name="close" size={22} color={TEXT} />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.modalContentRow}>
+                        <View style={styles.modalColumn}>
+                            <Text style={styles.modalLabel}>{t.hour}</Text>
+                            <ScrollView ref={hourRef} style={styles.modalList} showsVerticalScrollIndicator>
+                                {Array.from({ length: 24 }, (_, i) => i).map(h => (
+                                    <TouchableOpacity key={h} style={[styles.modalOption, selectedHour === h && styles.modalOptionActive]} onPress={() => setSelectedHour(h)}>
+                                        <Text style={[styles.modalOptionText, selectedHour === h && styles.modalOptionTextActive]}>{formatTwo(h)}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                        <View style={styles.modalColumn}>
+                            <Text style={styles.modalLabel}>{t.minute}</Text>
+                            <ScrollView ref={minuteRef} style={styles.modalList} showsVerticalScrollIndicator>
+                                {Array.from({ length: 60 }, (_, i) => i).map(m => (
+                                    <TouchableOpacity key={m} style={[styles.modalOption, selectedMinute === m && styles.modalOptionActive]} onPress={() => setSelectedMinute(m)}>
+                                        <Text style={[styles.modalOptionText, selectedMinute === m && styles.modalOptionTextActive]}>{formatTwo(m)}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                        <View style={styles.modalColumn}>
+                            <Text style={styles.modalLabel}>{t.second}</Text>
+                            <ScrollView ref={secondRef} style={styles.modalList} showsVerticalScrollIndicator>
+                                {Array.from({ length: 60 }, (_, i) => i).map(s => (
+                                    <TouchableOpacity key={s} style={[styles.modalOption, selectedSecond === s && styles.modalOptionActive]} onPress={() => setSelectedSecond(s)}>
+                                        <Text style={[styles.modalOptionText, selectedSecond === s && styles.modalOptionTextActive]}>{formatTwo(s)}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    </View>
+                    <View style={styles.modalButtonsRow}>
+                        <TouchableOpacity style={styles.secondaryButton} onPress={useNowTime}>
+                            <Text style={styles.secondaryButtonText}>{t.useNow}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.primaryButton} onPress={applyTime}>
+                            <Text style={styles.primaryButtonText}>{t.apply}</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </View>
-            <View style={styles.modalContentRow}>
-              <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>{t.hour}</Text>
-                <ScrollView ref={hourRef} style={styles.modalList} showsVerticalScrollIndicator>
-                  {Array.from({ length: 24 }, (_, i) => i).map(h => (
-                    <TouchableOpacity key={h} style={[styles.modalOption, selectedHour === h && styles.modalOptionActive]} onPress={() => setSelectedHour(h)}>
-                      <Text style={[styles.modalOptionText, selectedHour === h && styles.modalOptionTextActive]}>{formatTwo(h)}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-              <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>{t.minute}</Text>
-                <ScrollView ref={minuteRef} style={styles.modalList} showsVerticalScrollIndicator>
-                  {Array.from({ length: 60 }, (_, i) => i).map(m => (
-                    <TouchableOpacity key={m} style={[styles.modalOption, selectedMinute === m && styles.modalOptionActive]} onPress={() => setSelectedMinute(m)}>
-                      <Text style={[styles.modalOptionText, selectedMinute === m && styles.modalOptionTextActive]}>{formatTwo(m)}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-              <View style={styles.modalColumn}>
-                <Text style={styles.modalLabel}>{t.second}</Text>
-                <ScrollView ref={secondRef} style={styles.modalList} showsVerticalScrollIndicator>
-                  {Array.from({ length: 60 }, (_, i) => i).map(s => (
-                    <TouchableOpacity key={s} style={[styles.modalOption, selectedSecond === s && styles.modalOptionActive]} onPress={() => setSelectedSecond(s)}>
-                      <Text style={[styles.modalOptionText, selectedSecond === s && styles.modalOptionTextActive]}>{formatTwo(s)}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={useNowTime}>
-                <Text style={styles.secondaryButtonText}>{t.useNow}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButton} onPress={applyTime}>
-                <Text style={styles.primaryButtonText}>{t.apply}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        </Modal>
 
-    </View>
+      </KeyboardAvoidingView>
     </ProtectedRoute>
   );
 }
@@ -908,9 +977,13 @@ const styles = StyleSheet.create({
     color: TEXT_SECONDARY,
     fontSize: 12,
     marginBottom: 6,
+    textAlign: 'center',
   },
   modalList: {
     maxHeight: 220,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+    borderRadius: 8,
   },
   modalOption: {
     height: ROW_HEIGHT,
@@ -920,7 +993,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   modalOptionActive: {
-    backgroundColor: '#F2F4F5',
+    backgroundColor: '#E9ECEF',
   },
   modalOptionText: {
     color: TEXT,
@@ -928,11 +1001,12 @@ const styles = StyleSheet.create({
   },
   modalOptionTextActive: {
     fontWeight: 'bold',
+    color: PRIMARY,
   },
   modalButtonsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: 16,
     gap: 12,
   },
   primaryButton: {
@@ -961,7 +1035,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  // Novos estilos
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -976,39 +1049,10 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
-  addNewOption: {
-    backgroundColor: '#F8F9FA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  addNewText: {
-    color: PRIMARY,
-    fontWeight: '600',
-  },
-  emptyOptionsContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-  },
-  emptyOptionsText: {
-    color: TEXT_SECONDARY,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  emptyOptionsSubtext: {
-    color: TEXT_SECONDARY,
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  modalContent: {
-    marginVertical: 16,
+  notesTouchable: {
+    flex: 1,
   },
   disabledButton: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#ACB8C6',
   },
 });

@@ -171,7 +171,7 @@ class LocalDatabaseService {
       
       if (!this.db) {
         console.error('❌ Banco de dados não inicializado');
-        return { success: false, id: '', message: 'Banco de dados não inicializado' };
+        return { success: false, id: '', message: 'Database not initialized' };
       }
 
       const id = this.generateId();

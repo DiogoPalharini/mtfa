@@ -1,6 +1,7 @@
 import { localDatabaseService, LocalTruckLoad } from './localDatabaseService';
 import { addTruckService, TruckLoadFormData } from './addTruckService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getTranslatedMessage, ErrorMessages } from './translations';
 
 interface SyncResult {
   success: boolean;
@@ -15,6 +16,25 @@ class SyncService {
 
   constructor() {
     this.checkConnectivity();
+  }
+
+  // Método para obter mensagens traduzidas
+  private async getMessage(key: keyof ErrorMessages): Promise<string> {
+    try {
+      const savedLanguage = await AsyncStorage.getItem('userLanguage');
+      const language = (savedLanguage && ['pt', 'en', 'de'].includes(savedLanguage)) 
+        ? savedLanguage as LanguageCode 
+        : 'en';
+      
+      // Log temporário para debug
+      if (key === 'noPendingLoads') {
+        console.log(`🔍 DEBUG - Idioma salvo: ${savedLanguage}, Idioma usado: ${language}, Chave: ${key}`);
+      }
+      
+      return getTranslatedMessage(key, language);
+    } catch (error) {
+      return getTranslatedMessage(key, 'en');
+    }
   }
 
   // Verificar conectividade
@@ -68,20 +88,20 @@ class SyncService {
           await localDatabaseService.markAsSynced(localResult.id);
           return {
             success: true,
-            message: 'Carregamento salvo e sincronizado com sucesso!',
+            message: await this.getMessage('loadSavedAndSynced'),
             synced: true
           };
         } else {
           return {
             success: true,
-            message: 'Carregamento salvo localmente. Será sincronizado quando houver conexão.',
+            message: await this.getMessage('loadSavedLocally'),
             synced: false
           };
         }
       } else {
         return {
           success: true,
-          message: 'Carregamento salvo localmente. Será sincronizado quando houver conexão.',
+          message: await this.getMessage('loadSavedLocally'),
           synced: false
         };
       }
@@ -89,7 +109,7 @@ class SyncService {
       // Erro ao salvar carregamento
       return {
         success: false,
-        message: 'Falha ao salvar carregamento',
+        message: await this.getMessage('saveLoadFailed'),
         synced: false
       };
     }
@@ -102,7 +122,7 @@ class SyncService {
       const load = loads.find(l => l.id === id);
       
       if (!load) {
-        return { success: false, message: 'Carregamento não encontrado' };
+        return { success: false, message: await this.getMessage('loadNotFound') };
       }
 
       // Converter para formato do servidor
@@ -129,14 +149,14 @@ class SyncService {
       // Tentar enviar para o servidor
       const result = await addTruckService.addTruckLoad(truckLoadData);
       
-      if (result.success) {
-        return { success: true, message: 'Sincronizado com sucesso' };
-      } else {
-        return { success: false, message: result.message };
-      }
+        if (result.success) {
+          return { success: true, message: await this.getMessage('syncedSuccessfully') };
+        } else {
+          return { success: false, message: result.message };
+        }
     } catch (error) {
       // Erro ao sincronizar carregamento
-      return { success: false, message: 'Falha na sincronização com o servidor' };
+      return { success: false, message: await this.getMessage('serverSyncFailed') };
     }
   }
 
@@ -147,7 +167,7 @@ class SyncService {
         success: false,
         synced: 0,
         failed: 0,
-        message: 'Sincronização já em andamento'
+        message: await this.getMessage('syncInProgress')
       };
     }
 
@@ -162,7 +182,7 @@ class SyncService {
           success: false,
           synced: 0,
           failed: 0,
-          message: 'Sem conexão com a internet'
+          message: await this.getMessage('noInternetConnection')
         };
       }
 
@@ -174,7 +194,7 @@ class SyncService {
           success: true,
           synced: 0,
           failed: 0,
-          message: 'Nenhum carregamento pendente para sincronizar'
+          message: await this.getMessage('noPendingLoads')
         };
       }
 
@@ -204,8 +224,8 @@ class SyncService {
       await AsyncStorage.setItem('lastSyncTimestamp', Date.now().toString());
 
       const message = synced > 0 
-        ? `${synced} carregamento(s) sincronizado(s) com sucesso${failed > 0 ? `. ${failed} falharam.` : '.'}`
-        : 'Nenhum carregamento foi sincronizado.';
+        ? `${synced} ${await this.getMessage('syncSuccessMessage')}${failed > 0 ? `. ${failed} ${await this.getMessage('syncFailedCount')}.` : '.'}`
+        : await this.getMessage('syncNoLoadsMessage');
 
       return {
         success: synced > 0,
@@ -220,7 +240,7 @@ class SyncService {
         success: false,
         synced: 0,
         failed: 0,
-        message: 'Falha durante a sincronização'
+        message: await this.getMessage('syncFailed')
       };
     } finally {
       this.isSyncing = false;

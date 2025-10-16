@@ -16,7 +16,7 @@ export interface CloudUser {
   id: number;
   name: string;
   email: string;
-  level: string; // O nível geralmente é uma string, como 'Superadmin'
+  level: 'Staff' | 'Licencee' | 'Demo'; // Níveis específicos do sistema
 }
 
 export interface LoginResponse {
@@ -177,6 +177,32 @@ class CloudLoginService {
   // Retorna os dados do usuário atual
   public getCurrentUser(): CloudUser | null {
     return this.currentUser;
+  }
+
+  // Verifica se o usuário tem acesso completo (inicialmente todos têm)
+  public hasFullAccess(): boolean {
+    // Inicialmente todas as contas têm acesso completo
+    return this.currentUser !== null;
+  }
+
+  // Verifica se o usuário é Staff
+  public isStaff(): boolean {
+    return this.currentUser?.level === 'Staff';
+  }
+
+  // Verifica se o usuário é Licencee
+  public isLicencee(): boolean {
+    return this.currentUser?.level === 'Licencee';
+  }
+
+  // Verifica se o usuário é Demo
+  public isDemo(): boolean {
+    return this.currentUser?.level === 'Demo';
+  }
+
+  // Retorna o nível do usuário atual
+  public getUserLevel(): string | null {
+    return this.currentUser?.level || null;
   }
 }
 

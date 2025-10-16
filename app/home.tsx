@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar as RNStatusBar, FlatList, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Platform, StatusBar as RNStatusBar, FlatList, Alert, BackHandler } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
@@ -22,54 +22,6 @@ const WARNING = '#FFC107';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? RNStatusBar.currentHeight ?? 0 : 0;
 
-// Função para converter LocalTruckLoad para LoadItem
-const convertToLoadItem = (localLoad: LocalTruckLoad): LoadItem => {
-  // Converter data de YYYY-MM-DD para DD/MM/YYYY
-  const formatDateForDisplay = (dateString: string): string => {
-    if (!dateString) return '';
-    try {
-      const [year, month, day] = dateString.split('-');
-      return `${day}/${month}/${year}`;
-    } catch {
-      return dateString;
-    }
-  };
-
-  // Converter hora de HH:mm:ss para HH:mm
-  const formatTimeForDisplay = (timeString: string): string => {
-    if (!timeString) return '';
-    try {
-      return timeString.substring(0, 5); // Remove os segundos
-    } catch {
-      return timeString;
-    }
-  };
-
-  return {
-    id: localLoad.id,
-    date: formatDateForDisplay(localLoad.reg_date),
-    time: formatTimeForDisplay(localLoad.reg_time),
-    truck: localLoad.othertruck || localLoad.truck,
-    othertruck: localLoad.othertruck || undefined,
-    driver: localLoad.otherdriver || localLoad.driver,
-    otherdriver: localLoad.otherdriver || undefined,
-    company: localLoad.otherfarm || localLoad.farm,
-    otherfarm: localLoad.otherfarm || undefined,
-    field: localLoad.otherfield || localLoad.field,
-    otherfield: localLoad.otherfield || undefined,
-    variety: localLoad.othervariety || localLoad.variety,
-    othervariety: localLoad.othervariety || undefined,
-    deliveryLocation: localLoad.otherdestination || localLoad.destination,
-    otherdestination: localLoad.otherdestination || undefined,
-    agreement: localLoad.otheragreement || localLoad.agreement,
-    otheragreement: localLoad.otheragreement || undefined,
-    notes: localLoad.dnote || undefined,
-    status: localLoad.status === 'synced' ? 'sincronizado' : 'pendente',
-    created_at: localLoad.created_at,
-    synced_at: localLoad.synced_at
-  };
-};
-
 export default function HomeScreen() {
   const { language } = useLanguage();
   const { user, logout } = useAuth();
@@ -82,6 +34,54 @@ export default function HomeScreen() {
   const [selectedLoad, setSelectedLoad] = useState<LoadItem | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Função para converter LocalTruckLoad para LoadItem
+  const convertToLoadItem = (localLoad: LocalTruckLoad): LoadItem => {
+    // Converter data de YYYY-MM-DD para DD/MM/YYYY
+    const formatDateForDisplay = (dateString: string): string => {
+      if (!dateString) return '';
+      try {
+        const [year, month, day] = dateString.split('-');
+        return `${day}/${month}/${year}`;
+      } catch {
+        return dateString;
+      }
+    };
+
+    // Converter hora de HH:mm:ss para HH:mm
+    const formatTimeForDisplay = (timeString: string): string => {
+      if (!timeString) return '';
+      try {
+        return timeString.substring(0, 5); // Remove os segundos
+      } catch {
+        return timeString;
+      }
+    };
+
+    return {
+      id: localLoad.id,
+      date: formatDateForDisplay(localLoad.reg_date),
+      time: formatTimeForDisplay(localLoad.reg_time),
+      truck: localLoad.othertruck || localLoad.truck,
+      othertruck: localLoad.othertruck || undefined,
+      driver: localLoad.otherdriver || localLoad.driver,
+      otherdriver: localLoad.otherdriver || undefined,
+      company: localLoad.otherfarm || localLoad.farm,
+      otherfarm: localLoad.otherfarm || undefined,
+      field: localLoad.otherfield || localLoad.field,
+      otherfield: localLoad.otherfield || undefined,
+      variety: localLoad.othervariety || localLoad.variety,
+      othervariety: localLoad.othervariety || undefined,
+      deliveryLocation: localLoad.otherdestination || localLoad.destination,
+      otherdestination: localLoad.otherdestination || undefined,
+      agreement: localLoad.otheragreement || localLoad.agreement,
+      otheragreement: localLoad.otheragreement || undefined,
+      notes: localLoad.dnote || undefined,
+      status: localLoad.status === 'synced' ? 'sincronizado' : 'pendente',
+      created_at: localLoad.created_at,
+      synced_at: localLoad.synced_at
+    };
+  };
 
   const syncColor = useMemo(() => (pending === 0 ? SUCCESS : WARNING), [pending]);
   const syncText = useMemo(() => (pending === 0 ? t.allSynced : `${pending} ${t.pending}`), [pending, t]);
@@ -109,12 +109,45 @@ export default function HomeScreen() {
     loadTruckLoads();
   }, []);
 
+  // Interceptar botão físico de voltar do Android
+  useEffect(() => {
+    const backAction = () => {
+      // Mostrar confirmação de logout
+      Alert.alert(
+        commonT.confirmLogout,
+        commonT.confirmLogoutMessage,
+        [
+          {
+            text: commonT.cancel,
+            style: 'cancel',
+          },
+          {
+            text: commonT.logout,
+            style: 'destructive',
+            onPress: async () => {
+              await logout();
+              router.replace('/');
+            },
+          },
+        ]
+      );
+      return true; // Previne o comportamento padrão de voltar
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    return () => backHandler.remove();
+  }, [commonT, logout]);
+
   const handleSyncNow = async () => {
     if (isSyncing) return;
     
     setIsSyncing(true);
     try {
       const result = await syncService.syncAllPendingLoads();
+      
+      console.log(`🔍 DEBUG - Resultado da sincronização:`, result);
+      console.log(`🔍 DEBUG - Mensagem que será exibida: "${result.message}"`);
       
       if (result.success) {
         Alert.alert(commonT.success, result.message);
@@ -152,20 +185,43 @@ export default function HomeScreen() {
     );
   };
 
+  const handleBackPress = () => {
+    Alert.alert(
+      commonT.confirmLogout,
+      commonT.confirmLogoutMessage,
+      [
+        {
+          text: commonT.cancel,
+          style: 'cancel',
+        },
+        {
+          text: commonT.logout,
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+            router.replace('/');
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ProtectedRoute>
       <View style={styles.container}>
         <AppHeader 
           projectName="MTFA" 
+          showBack={true}
           showSync={true}
           isSyncing={isSyncing}
           onSyncPress={handleSyncNow}
           onLogoutPress={handleLogout}
+          onBackPress={handleBackPress}
         />
 
         <View style={styles.content}>
           <Text style={styles.welcome}>
-            {t.welcome.replace('{user}', user?.name || user?.username || user?.email || 'Usuário')}
+            {t.welcome.replace('{user}', user?.name || user?.email || 'Usuário')}
           </Text>
 
         <View style={styles.syncCard}>
@@ -188,13 +244,13 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>{t.recentLoads}</Text>
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Carregando carregamentos...</Text>
+            <Text style={styles.loadingText}>{t.loadingLoads}</Text>
           </View>
         ) : truckLoads.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="document-outline" size={48} color={TEXT_SECONDARY} />
-            <Text style={styles.emptyText}>Nenhum carregamento encontrado</Text>
-            <Text style={styles.emptySubtext}>Crie seu primeiro carregamento usando o botão acima</Text>
+            <Text style={styles.emptyText}>{t.noLoadsFound}</Text>
+            <Text style={styles.emptySubtext}>{t.createFirstLoad}</Text>
           </View>
         ) : (
           <FlatList
