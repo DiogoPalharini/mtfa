@@ -37,28 +37,47 @@ export default function HomeScreen() {
 
   // Função para converter LocalTruckLoad para LoadItem
   const convertToLoadItem = (localLoad: LocalTruckLoad): LoadItem => {
+    console.log('🔍 Convertendo dados:', {
+      id: localLoad.id,
+      reg_date: localLoad.reg_date,
+      reg_time: localLoad.reg_time,
+      truck: localLoad.truck
+    });
+
     // Converter data de YYYY-MM-DD para DD/MM/YYYY
     const formatDateForDisplay = (dateString: string): string => {
-      if (!dateString) return '';
+      if (!dateString || dateString === 'undefined' || dateString === 'null') {
+        console.log('⚠️ Data inválida:', dateString);
+        return 'Data não informada';
+      }
       try {
         const [year, month, day] = dateString.split('-');
+        if (!year || !month || !day) {
+          console.log('⚠️ Formato de data inválido:', dateString);
+          return 'Data inválida';
+        }
         return `${day}/${month}/${year}`;
-      } catch {
+      } catch (error) {
+        console.log('❌ Erro ao formatar data:', error, 'Data original:', dateString);
         return dateString;
       }
     };
 
     // Converter hora de HH:mm:ss para HH:mm
     const formatTimeForDisplay = (timeString: string): string => {
-      if (!timeString) return '';
+      if (!timeString || timeString === 'undefined' || timeString === 'null') {
+        console.log('⚠️ Hora inválida:', timeString);
+        return 'Hora não informada';
+      }
       try {
         return timeString.substring(0, 5); // Remove os segundos
-      } catch {
+      } catch (error) {
+        console.log('❌ Erro ao formatar hora:', error, 'Hora original:', timeString);
         return timeString;
       }
     };
 
-    return {
+    const convertedItem = {
       id: localLoad.id,
       date: formatDateForDisplay(localLoad.reg_date),
       time: formatTimeForDisplay(localLoad.reg_time),
@@ -81,6 +100,15 @@ export default function HomeScreen() {
       created_at: localLoad.created_at,
       synced_at: localLoad.synced_at
     };
+
+    console.log('✅ Item convertido:', {
+      id: convertedItem.id,
+      date: convertedItem.date,
+      time: convertedItem.time,
+      truck: convertedItem.truck
+    });
+
+    return convertedItem;
   };
 
   const syncColor = useMemo(() => (pending === 0 ? SUCCESS : WARNING), [pending]);

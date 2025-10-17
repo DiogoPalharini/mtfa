@@ -88,7 +88,7 @@ export default function LoadCard({ item, onPress }: Props) {
               <Ionicons name="car-outline" size={14} color={PRIMARY} />
             </View>
             <View style={styles.textContainer}>
-              <Text style={styles.labelText}>{t.vehicle}</Text>
+              <Text style={styles.labelText}>{t.truck}</Text>
               <Text style={styles.valueText}>{item.truck}</Text>
             </View>
           </View>
