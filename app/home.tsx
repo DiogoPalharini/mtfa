@@ -96,7 +96,7 @@ export default function HomeScreen() {
       agreement: localLoad.otheragreement || localLoad.agreement,
       otheragreement: localLoad.otheragreement || undefined,
       notes: localLoad.dnote || undefined,
-      status: localLoad.status === 'synced' ? 'sincronizado' : 'pendente',
+      status: (localLoad.status === 'synced' ? 'sincronizado' : 'pendente') as 'pendente' | 'sincronizado',
       created_at: localLoad.created_at,
       synced_at: localLoad.synced_at
     };
@@ -213,38 +213,17 @@ export default function HomeScreen() {
     );
   };
 
-  const handleBackPress = () => {
-    Alert.alert(
-      commonT.confirmLogout,
-      commonT.confirmLogoutMessage,
-      [
-        {
-          text: commonT.cancel,
-          style: 'cancel',
-        },
-        {
-          text: commonT.logout,
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-            router.replace('/');
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <ProtectedRoute>
       <View style={styles.container}>
         <AppHeader 
           projectName="MTFA" 
-          showBack={true}
+          showBack={false}
           showSync={true}
           isSyncing={isSyncing}
           onSyncPress={handleSyncNow}
           onLogoutPress={handleLogout}
-          onBackPress={handleBackPress}
         />
 
         <View style={styles.content}>
@@ -253,11 +232,10 @@ export default function HomeScreen() {
           </Text>
 
         <View style={styles.syncCard}>
-          <View style={styles.syncCardHeader}>
-            <Text style={styles.syncCardTitle}>{t.syncStatusTitle}</Text>
-            <Ionicons name={pending === 0 ? 'checkmark-circle' : 'alert-circle'} size={22} color={syncColor} />
+          <View style={styles.syncCardContent}>
+            <Ionicons name={pending === 0 ? 'checkmark-circle' : 'alert-circle'} size={18} color={syncColor} />
+            <Text style={[styles.syncMessage, { color: syncColor }]}>{syncText}</Text>
           </View>
-          <Text style={[styles.syncMessage, { color: syncColor }]}>{syncText}</Text>
         </View>
 
         <TouchableOpacity
@@ -318,10 +296,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: BG },
   content: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
   welcome: { color: TEXT, fontSize: 22, fontWeight: 'bold', marginBottom: 16 },
-  syncCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 16, marginBottom: 16, ...CARD_SHADOW },
-  syncCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  syncCardTitle: { color: TEXT, fontSize: 16, fontWeight: 'bold' },
-  syncMessage: { fontSize: 14, marginBottom: 12 },
+  syncCard: { backgroundColor: SURFACE, borderRadius: 12, padding: 12, marginBottom: 16, ...CARD_SHADOW },
+  syncCardContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  syncMessage: { fontSize: 14, fontWeight: '500' },
   sectionTitle: { color: TEXT, fontSize: 16, fontWeight: 'bold', marginBottom: 12, marginTop: 8 },
   createButton: { backgroundColor: PRIMARY, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16, ...CARD_SHADOW },
   createButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },

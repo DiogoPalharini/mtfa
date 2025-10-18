@@ -10,7 +10,7 @@ const TEXT = '#212529';
 const TEXT_SECONDARY = '#6C757D';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0;
-const HEADER_PADDING_TOP = STATUS_BAR_HEIGHT + 20; // Aumentado de 12 para 20
+const HEADER_PADDING_TOP = STATUS_BAR_HEIGHT + 8; // Reduzido para melhor UX
 
 interface AppHeaderProps {
   projectName?: string;
@@ -58,6 +58,7 @@ export default function AppHeader({
         <View style={styles.left}>
           {showBack && (
             <TouchableOpacity 
+              style={styles.backButton}
               onPress={onBackPress || (() => router.back())} 
               activeOpacity={0.8}
             >
@@ -96,7 +97,11 @@ export default function AppHeader({
             )}
             
             <View style={{ position: 'relative' }}>
-              <TouchableOpacity activeOpacity={0.8} onPress={() => setOpenLangMenu((v) => !v)}>
+              <TouchableOpacity 
+                style={styles.languageButton}
+                activeOpacity={0.8} 
+                onPress={() => setOpenLangMenu((v) => !v)}
+              >
                 <Ionicons name="globe-outline" size={24} color={TEXT_ON_PRIMARY} />
               </TouchableOpacity>
 
@@ -131,35 +136,63 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    minHeight: 44, // Altura mínima para garantir usabilidade
+    position: 'relative',
   },
   left: {
+    position: 'absolute',
+    left: 16,
+    top: 0,
+    bottom: 0,
     width: 40,
     alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  backButton: {
+    padding: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   right: {
+    position: 'absolute',
+    right: 16,
+    top: 0,
+    bottom: 0,
     alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   rightButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   syncButton: {
-    padding: 4,
-    opacity: 1,
+    padding: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoutButton: {
-    padding: 4,
-    opacity: 1,
+    padding: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  languageButton: {
+    padding: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     color: TEXT_ON_PRIMARY,
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
   },
   langMenu: {
     position: 'absolute',
