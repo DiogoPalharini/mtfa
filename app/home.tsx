@@ -34,6 +34,7 @@ export default function HomeScreen() {
   const [selectedLoad, setSelectedLoad] = useState<LoadItem | null>(null);
   const [detailsVisible, setDetailsVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAutoSyncing, setIsAutoSyncing] = useState<boolean>(false);
 
   // Função para converter LocalTruckLoad para LoadItem
   const convertToLoadItem = (localLoad: LocalTruckLoad): LoadItem => {
@@ -51,15 +52,39 @@ export default function HomeScreen() {
         return 'Data não informada';
       }
       try {
-        const [year, month, day] = dateString.split('-');
+        // Tentar diferentes formatos de data
+        let year, month, day;
+        
+        // Formato YYYY-MM-DD
+        if (dateString.includes('-')) {
+          [year, month, day] = dateString.split('-');
+        }
+        // Formato DD.MM.YYYY
+        else if (dateString.includes('.')) {
+          [day, month, year] = dateString.split('.');
+        }
+        // Formato DD/MM/YYYY
+        else if (dateString.includes('/')) {
+          [day, month, year] = dateString.split('/');
+        }
+        else {
+          console.log('⚠️ Formato de data não reconhecido:', dateString);
+          return 'Data inválida';
+        }
+        
         if (!year || !month || !day) {
           console.log('⚠️ Formato de data inválido:', dateString);
           return 'Data inválida';
         }
-        return `${day}/${month}/${year}`;
+        
+        // Garantir que os valores tenham 2 dígitos
+        const formattedDay = day.padStart(2, '0');
+        const formattedMonth = month.padStart(2, '0');
+        
+        return `${formattedDay}/${formattedMonth}/${year}`;
       } catch (error) {
         console.log('❌ Erro ao formatar data:', error, 'Data original:', dateString);
-        return dateString;
+        return 'Data inválida';
       }
     };
 
@@ -135,6 +160,31 @@ export default function HomeScreen() {
   // Carregar dados quando a tela é montada
   useEffect(() => {
     loadTruckLoads();
+  }, []);
+
+  // Detectar sincronização automática
+  useEffect(() => {
+    const checkAutoSync = async () => {
+      try {
+        const isCurrentlySyncing = syncService.isCurrentlySyncing();
+        setIsAutoSyncing(isCurrentlySyncing);
+        
+        if (isCurrentlySyncing) {
+          console.log('🔄 Sincronização automática detectada');
+          // Recarregar dados após um tempo para mostrar o resultado
+          setTimeout(() => {
+            loadTruckLoads();
+          }, 2000);
+        }
+      } catch (error) {
+        console.error('❌ Erro ao verificar sincronização automática:', error);
+      }
+    };
+
+    // Verificar a cada 500ms se há sincronização automática
+    const interval = setInterval(checkAutoSync, 500);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Interceptar botão físico de voltar do Android
@@ -233,8 +283,17 @@ export default function HomeScreen() {
 
         <View style={styles.syncCard}>
           <View style={styles.syncCardContent}>
-            <Ionicons name={pending === 0 ? 'checkmark-circle' : 'alert-circle'} size={18} color={syncColor} />
-            <Text style={[styles.syncMessage, { color: syncColor }]}>{syncText}</Text>
+            <Ionicons 
+              name={
+                isAutoSyncing ? 'sync' : 
+                pending === 0 ? 'checkmark-circle' : 'alert-circle'
+              } 
+              size={18} 
+              color={isAutoSyncing ? PRIMARY : syncColor} 
+            />
+            <Text style={[styles.syncMessage, { color: isAutoSyncing ? PRIMARY : syncColor }]}>
+              {isAutoSyncing ? t.syncingAutomatically : syncText}
+            </Text>
           </View>
         </View>
 

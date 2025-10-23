@@ -10,7 +10,7 @@ const TEXT = '#212529';
 const TEXT_SECONDARY = '#6C757D';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (RNStatusBar.currentHeight || 24) : 0;
-const HEADER_PADDING_TOP = STATUS_BAR_HEIGHT + 8; // Reduzido para melhor UX
+const HEADER_PADDING_TOP = STATUS_BAR_HEIGHT + 8; // Reduzido para cabeçalho mais compacto
 
 interface AppHeaderProps {
   projectName?: string;
@@ -58,11 +58,11 @@ export default function AppHeader({
         <View style={styles.left}>
           {showBack && (
             <TouchableOpacity 
-              style={styles.backButton}
               onPress={onBackPress || (() => router.back())} 
               activeOpacity={0.8}
+              style={{ padding: 3 }}
             >
-              <Ionicons name="arrow-back" size={24} color={TEXT_ON_PRIMARY} />
+              <Ionicons name="arrow-back" size={23} color={TEXT_ON_PRIMARY} />
             </TouchableOpacity>
           )}
         </View>
@@ -73,14 +73,14 @@ export default function AppHeader({
           <View style={styles.rightButtons}>
             {showSync && (
               <TouchableOpacity 
-                style={styles.syncButton} 
                 onPress={onSyncPress}
                 disabled={isSyncing}
                 activeOpacity={0.8}
+                style={{ marginRight: 14, padding: 3 }}
               >
                 <Ionicons 
                   name={isSyncing ? "sync" : "cloud-upload-outline"} 
-                  size={24} 
+                  size={23} 
                   color={TEXT_ON_PRIMARY} 
                 />
               </TouchableOpacity>
@@ -88,21 +88,21 @@ export default function AppHeader({
             
             {onLogoutPress && (
               <TouchableOpacity 
-                style={styles.logoutButton} 
                 onPress={onLogoutPress}
                 activeOpacity={0.8}
+                style={{ marginRight: 14, padding: 3 }}
               >
-                <Ionicons name="log-out-outline" size={24} color={TEXT_ON_PRIMARY} />
+                <Ionicons name="log-out-outline" size={23} color={TEXT_ON_PRIMARY} />
               </TouchableOpacity>
             )}
             
             <View style={{ position: 'relative' }}>
               <TouchableOpacity 
-                style={styles.languageButton}
                 activeOpacity={0.8} 
                 onPress={() => setOpenLangMenu((v) => !v)}
+                style={{ padding: 3 }}
               >
-                <Ionicons name="globe-outline" size={24} color={TEXT_ON_PRIMARY} />
+                <Ionicons name="globe-outline" size={23} color={TEXT_ON_PRIMARY} />
               </TouchableOpacity>
 
               {openLangMenu && (
@@ -136,12 +136,12 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44, // Altura mínima para garantir usabilidade
+    justifyContent: 'space-between',
     position: 'relative',
+    minHeight: 42,
   },
   left: {
     position: 'absolute',
@@ -149,50 +149,30 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 40,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  backButton: {
-    padding: 6,
-    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
   },
   right: {
     position: 'absolute',
     right: 16,
     top: 0,
     bottom: 0,
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
   },
   rightButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  syncButton: {
-    padding: 6,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoutButton: {
-    padding: 6,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  languageButton: {
-    padding: 6,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
     color: TEXT_ON_PRIMARY,
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '600',
+    textAlign: 'center',
+    flex: 1,
+    lineHeight: 24,
   },
   langMenu: {
     position: 'absolute',

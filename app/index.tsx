@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, Dimensions, KeyboardAvoidingView, Platform, ScrollView, Animated, Alert } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { loginI18n } from '../i18n/login';
@@ -24,18 +24,48 @@ export default function LoginScreen() {
   
   const [showPassword, setShowPassword] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [formKey, setFormKey] = useState(0);
   
   // Animações para os campos de input
   const usernameFocusAnim = useState(new Animated.Value(0))[0];
   const passwordFocusAnim = useState(new Animated.Value(0))[0];
   const buttonScaleAnim = useState(new Animated.Value(1))[0];
   
-  const { control, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
+  const { control, handleSubmit, formState: { errors }, reset } = useForm<LoginFormData>({
     defaultValues: {
       username: '',
       password: ''
     }
   });
+
+  // Resetar formulário quando necessário (após logout)
+  useFocusEffect(
+    useCallback(() => {
+      // Resetar formulário quando a tela ganha foco
+      reset({
+        username: '',
+        password: ''
+      });
+      // Incrementar chave para forçar re-render completo
+      setFormKey(prev => prev + 1);
+      // Limpar estado de foco também
+      setFocusedField(null);
+    }, [reset])
+  );
+
+  // Função para forçar autofill quando necessário
+  const handleEmailFocus = (fieldName: string, animValue: Animated.Value) => {
+    handleFieldFocus(fieldName, animValue);
+    
+    // Pequeno delay para garantir que o autofill tenha tempo de aparecer
+    setTimeout(() => {
+      // Forçar re-render do campo para garantir que o autofill funcione
+      if (Platform.OS === 'android') {
+        // No Android, às vezes é necessário forçar o foco novamente
+        // Isso é feito automaticamente pelo sistema
+      }
+    }, 100);
+  };
 
   const handleFieldFocus = (fieldName: string, animValue: Animated.Value) => {
     setFocusedField(fieldName);
@@ -108,7 +138,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Formulário */}
-          <View style={styles.formContainer}>
+          <View style={styles.formContainer} nativeID="login-form" key={formKey}>
             {/* Campo Usuário/Email */}
             <View style={styles.inputContainer}>
               <Controller
@@ -137,7 +167,7 @@ export default function LoginScreen() {
                       placeholderTextColor="#6C757D"
                       value={value}
                       onChangeText={onChange}
-                      onFocus={() => handleFieldFocus('username', usernameFocusAnim)}
+                      onFocus={() => handleEmailFocus('username', usernameFocusAnim)}
                       onBlur={() => {
                         onBlur();
                         handleFieldBlur('username', usernameFocusAnim);
@@ -145,6 +175,13 @@ export default function LoginScreen() {
                       autoCapitalize="none"
                       autoCorrect={false}
                       keyboardType="email-address"
+                      textContentType="emailAddress"
+                      autoComplete="email"
+                      importantForAutofill="yes"
+                      nativeID="username"
+                      returnKeyType="next"
+                      enablesReturnKeyAutomatically={true}
+                      autoFocus={false}
                     />
                   </Animated.View>
                 )}
@@ -190,6 +227,13 @@ export default function LoginScreen() {
                         }}
                         secureTextEntry={!showPassword}
                         autoCapitalize="none"
+                        textContentType="password"
+                        autoComplete="password"
+                        importantForAutofill="yes"
+                        nativeID="password"
+                        returnKeyType="done"
+                        enablesReturnKeyAutomatically={true}
+                        autoFocus={false}
                       />
                       <TouchableOpacity
                         style={styles.eyeIcon}

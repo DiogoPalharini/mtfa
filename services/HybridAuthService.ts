@@ -31,10 +31,19 @@ export interface HybridLoginResult {
 class HybridAuthService {
   private currentUser: CloudUser | null = null;
   private sessionCookie: string | null = null;
+  private sessionExpiryTime: number | null = null;
+  private sessionCheckInterval: NodeJS.Timeout | null = null;
+  
+  // Configuração de timeout de sessão (1 hora)
+  private readonly SESSION_TIMEOUT_MS = 60 * 60 * 1000; // 1 hora
+  // Verificar expiração a cada 5 minutos
+  private readonly SESSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutos
 
   constructor() {
     // Carregar dados salvos na inicialização
     this.loadSavedCredentials();
+    // Iniciar verificação automática de sessão
+    this.startSessionMonitoring();
   }
 
   // Obter idioma atual do AsyncStorage
@@ -59,24 +68,23 @@ class HybridAuthService {
   // Carregar credenciais salvas do AsyncStorage - OTIMIZADO
   private async loadSavedCredentials(): Promise<void> {
     try {
-      // Executar ambas as operações em paralelo
-      const [savedUser, savedCookie] = await Promise.all([
+      // Executar todas as operações em paralelo
+      const [savedUser, savedCookie, savedExpiry] = await Promise.all([
         AsyncStorage.getItem('hybrid_user'),
-        AsyncStorage.getItem('PHPSESSID')
+        AsyncStorage.getItem('PHPSESSID'),
+        AsyncStorage.getItem('session_expiry')
       ]);
       
       if (savedUser) {
         this.currentUser = JSON.parse(savedUser);
-        if (__DEV__) {
-          console.log('👤 Usuário carregado do storage');
-        }
       }
       
       if (savedCookie) {
         this.sessionCookie = savedCookie;
-        if (__DEV__) {
-          console.log('🍪 Cookie carregado do storage');
-        }
+      }
+      
+      if (savedExpiry) {
+        this.sessionExpiryTime = parseInt(savedExpiry);
       }
     } catch (error) {
       console.error('❌ Erro ao carregar credenciais salvas:', error);
@@ -86,18 +94,18 @@ class HybridAuthService {
   // Salvar credenciais no AsyncStorage - OTIMIZADO
   private async saveCredentials(user: CloudUser, cookie: string): Promise<void> {
     try {
-      // Executar ambas as operações em paralelo
+      // Definir tempo de expiração da sessão
+      this.sessionExpiryTime = Date.now() + this.SESSION_TIMEOUT_MS;
+      
+      // Executar todas as operações em paralelo
       await Promise.all([
         AsyncStorage.setItem('hybrid_user', JSON.stringify(user)),
-        AsyncStorage.setItem('PHPSESSID', cookie)
+        AsyncStorage.setItem('PHPSESSID', cookie),
+        AsyncStorage.setItem('session_expiry', this.sessionExpiryTime.toString())
       ]);
       
       this.currentUser = user;
       this.sessionCookie = cookie;
-      
-      if (__DEV__) {
-        console.log('💾 Credenciais salvas');
-      }
     } catch (error) {
       console.error('❌ Erro ao salvar credenciais:', error);
       throw error;
@@ -107,18 +115,16 @@ class HybridAuthService {
   // Limpar credenciais do AsyncStorage - OTIMIZADO
   private async clearCredentials(): Promise<void> {
     try {
-      // Executar ambas as operações em paralelo
+      // Executar todas as operações em paralelo
       await Promise.all([
         AsyncStorage.removeItem('hybrid_user'),
-        AsyncStorage.removeItem('PHPSESSID')
+        AsyncStorage.removeItem('PHPSESSID'),
+        AsyncStorage.removeItem('session_expiry')
       ]);
       
       this.currentUser = null;
       this.sessionCookie = null;
-      
-      if (__DEV__) {
-        console.log('🧹 Credenciais limpas');
-      }
+      this.sessionExpiryTime = null;
     } catch (error) {
       console.error('❌ Erro ao limpar credenciais:', error);
     }
@@ -286,10 +292,24 @@ class HybridAuthService {
 
     } catch (error) {
       console.error('❌ Erro na API Moderna:', error);
+      
+      // Tratar diferentes tipos de erro
+      let errorMessage = await this.getMessage('apiConnectionFailed');
+      
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 503) {
+          errorMessage = 'Servidor temporariamente indisponível. Tente novamente em alguns minutos.';
+        } else if (error.response?.status === 500) {
+          errorMessage = await this.getMessage('serverError');
+        } else if (!error.response) {
+          errorMessage = await this.getMessage('networkError');
+        }
+      }
+      
       return {
         success: false,
-        message: await this.getMessage('apiConnectionFailed'),
-        error: await this.getMessage('apiConnectionFailed')
+        message: errorMessage,
+        error: errorMessage
       };
     }
   }
@@ -340,21 +360,80 @@ class HybridAuthService {
     return Math.abs(hash).toString(36);
   }
 
+  // Iniciar monitoramento automático da sessão
+  private startSessionMonitoring(): void {
+    // Limpar intervalo anterior se existir
+    if (this.sessionCheckInterval) {
+      clearInterval(this.sessionCheckInterval);
+    }
+    
+    // Verificar expiração da sessão a cada 5 minutos
+    this.sessionCheckInterval = setInterval(() => {
+      this.checkSessionExpiry();
+    }, this.SESSION_CHECK_INTERVAL);
+  }
+  
+  // Parar monitoramento automático da sessão
+  private stopSessionMonitoring(): void {
+    if (this.sessionCheckInterval) {
+      clearInterval(this.sessionCheckInterval);
+      this.sessionCheckInterval = null;
+    }
+  }
+  
+  // Verificar se a sessão expirou
+  private checkSessionExpiry(): void {
+    if (this.sessionExpiryTime === null) {
+      return; // Não há sessão com timeout definido
+    }
+    
+    const now = Date.now();
+    const timeUntilExpiry = this.sessionExpiryTime - now;
+    
+    if (timeUntilExpiry <= 0) {
+      this.clearCredentials();
+      this.stopSessionMonitoring();
+      this.onSessionExpired();
+    }
+  }
+  
+  // Callback para quando a sessão expira (será sobrescrito pelo AuthContext)
+  private onSessionExpired: () => void = () => {};
+  
+  // Método para definir callback de expiração de sessão
+  public setSessionExpiredCallback(callback: () => void): void {
+    this.onSessionExpired = callback;
+  }
+
   // Métodos auxiliares
   public async logout(): Promise<void> {
-    console.log('🚪 Fazendo logout híbrido...');
+    this.stopSessionMonitoring();
     await this.clearCredentials();
-    console.log('✅ Logout híbrido concluído');
   }
 
   public isLoggedIn(): boolean {
-    const isLoggedIn = this.currentUser !== null && this.sessionCookie !== null;
-    console.log('🔍 Verificando login híbrido:', {
-      hasUser: this.currentUser !== null,
-      hasCookie: this.sessionCookie !== null,
-      isLoggedIn: isLoggedIn
-    });
-    return isLoggedIn;
+    // Verificar se há usuário e cookie
+    const hasCredentials = this.currentUser !== null && this.sessionCookie !== null;
+    
+    // Se não há credenciais, não está logado
+    if (!hasCredentials) {
+      return false;
+    }
+    
+    // Se não há tempo de expiração definido, considerar válido (sessão antiga sem timeout)
+    if (this.sessionExpiryTime === null) {
+      return true;
+    }
+    
+    // Verificar se a sessão não expirou
+    const isSessionValid = Date.now() < this.sessionExpiryTime;
+    
+    // Se a sessão expirou, limpar automaticamente
+    if (!isSessionValid) {
+      this.clearCredentials();
+    }
+    
+    return isSessionValid;
   }
 
   public getCurrentUser(): CloudUser | null {

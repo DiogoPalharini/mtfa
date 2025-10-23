@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { hybridAuthService, CloudUser } from '../services/HybridAuthService';
 import { localAuthService } from '../services/localAuthService';
+import { syncService } from '../services/syncService';
 import { useErrorTranslations } from '../hooks/useErrorTranslations';
 
 interface AuthContextValue {
@@ -24,6 +25,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Verificar sessão salva na inicialização
   useEffect(() => {
     checkSavedSession();
+    
+    // Configurar callback para quando a sessão expirar automaticamente
+    hybridAuthService.setSessionExpiredCallback(() => {
+      handleSessionExpired();
+    });
+    
+    // Cleanup: remover callback quando o componente for desmontado
+    return () => {
+      hybridAuthService.setSessionExpiredCallback(() => {});
+    };
   }, []);
 
   const checkSavedSession = async () => {
@@ -67,18 +78,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Função para lidar com expiração automática da sessão
+  const handleSessionExpired = async () => {
+    await clearAuthData();
+  };
+
   const clearAuthData = async () => {
     try {
-      console.log('🧹 Limpando dados de autenticação...');
       await AsyncStorage.removeItem('userData');
       await hybridAuthService.logout();
       // NÃO limpar credenciais locais aqui - elas devem persistir para login offline
       // await localAuthService.clearCredentials(); // Removido
       setUser(null);
       setIsAuthenticated(false);
-('✅ Dados de autenticação limpos (exceto credenciais locais)');
     } catch (error) {
       console.error('❌ Erro ao limpar dados de autenticação:', error);
+    }
+  };
+
+  // Função para sincronização automática após login online
+  const performAutoSync = async (): Promise<void> => {
+    try {
+      console.log('🔄 Iniciando sincronização automática após login online...');
+      
+      // Verificar se há itens pendentes para sincronizar
+      const stats = await syncService.getStats();
+      console.log('📊 Estatísticas de sincronização:', stats);
+      
+      if (stats.pending > 0) {
+        console.log(`🔄 Encontrados ${stats.pending} itens pendentes, iniciando sincronização...`);
+        
+        // Executar sincronização em background (não bloquear a UI)
+        setTimeout(async () => {
+          try {
+            const syncResult = await syncService.syncAllPendingLoads();
+            console.log('✅ Sincronização automática concluída:', syncResult);
+          } catch (error) {
+            console.error('❌ Erro na sincronização automática:', error);
+          }
+        }, 1000); // Aguardar 1 segundo para não interferir no login
+      } else {
+        console.log('✅ Nenhum item pendente para sincronizar');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao verificar itens pendentes:', error);
     }
   };
 
@@ -111,6 +154,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           await AsyncStorage.setItem('userData', JSON.stringify(hybridResult.user));
           setUser(hybridResult.user);
           setIsAuthenticated(true);
+          
+          // Executar sincronização automática após login online bem-sucedido
+          await performAutoSync();
           
           console.log('🎉 Login híbrido concluído com sucesso!');
           return { success: true, message: t('loginSuccess') };

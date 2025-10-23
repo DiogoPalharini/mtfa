@@ -8,12 +8,16 @@
       "expo-router",
       "expo-font",
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-localization"
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -21,15 +25,19 @@
     },
     "ios": {
       "supportsTablet": true,
-      "displayName": "MTFA"
+      "icon": "./assets/icon.png",
+      "bundleIdentifier": "com.diogopalaharini.mtfa"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#ffffff",
+        "monochromeImage": "./assets/icon.png"
       },
+      "icon": "./assets/icon.png",
       "edgeToEdgeEnabled": true,
-      "package": "com.diogopalaharini.mtfa"
+      "package": "com.diogopalaharini.mtfa",
+      "permissions": []
     },
     "web": {
       "favicon": "./assets/favicon.png"

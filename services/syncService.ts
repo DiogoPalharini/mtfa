@@ -2,6 +2,7 @@ import { localDatabaseService, LocalTruckLoad } from './localDatabaseService';
 import { addTruckService, TruckLoadFormData } from './addTruckService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTranslatedMessage, ErrorMessages } from './translations';
+import { LanguageCode } from '../contexts/LanguageContext';
 
 interface SyncResult {
   success: boolean;

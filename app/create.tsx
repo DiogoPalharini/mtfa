@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, Animated, Dimensions, Modal, Alert, KeyboardAvoidingView } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, Animated, Dimensions, Modal, Alert, KeyboardAvoidingView, BackHandler } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AppHeader from '../components/AppHeader';
@@ -196,6 +196,18 @@ export default function CreateTripScreen() {
     };
 
     loadData();
+  }, []);
+
+  // Interceptar botão físico de voltar do Android - apenas voltar sem confirmação
+  useEffect(() => {
+    const backAction = () => {
+      router.back();
+      return true; // Previne o comportamento padrão de voltar
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+    return () => backHandler.remove();
   }, []);
 
   // ✅ [CORREÇÃO] Removido useEffect que causava foco automático
@@ -603,7 +615,12 @@ export default function CreateTripScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >
-        <AppHeader projectName="MTFA" showBack onLogoutPress={handleLogout} />
+        <AppHeader 
+          projectName="MTFA" 
+          showBack 
+          onBackPress={() => router.back()} 
+          onLogoutPress={handleLogout} 
+        />
 
         {/* Conteúdo */}
         <ScrollView 

@@ -76,7 +76,7 @@ export default function LoadDetailsModal({ visible, item, onClose }: Props) {
             <Row label={t.field} value={item.field} icon="leaf-outline" />
             {item.otherfield && <Row label={t.customField} value={item.otherfield} icon="leaf-outline" />}
             
-            {/* Produto */}
+            {/* Cultura */}
             <Text style={styles.sectionTitle}>{t.product}</Text>
             <Row label={t.variety} value={item.variety} icon="pricetag-outline" />
             {item.othervariety && <Row label={t.customVariety} value={item.othervariety} icon="pricetag-outline" />}
