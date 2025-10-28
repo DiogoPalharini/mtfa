@@ -47,10 +47,12 @@ class LocalAuthService {
     try {
       const hashedPassword = await this.encryptPassword(password);
       
-      const success = await localDatabaseService.saveUserCredentials(email, hashedPassword, sessionId);
+      const success = await localDatabaseService().saveUserCredentials(email, hashedPassword, sessionId);
       
       if (success) {
+        console.log('✅ Credenciais salvas com sucesso para:', email);
       } else {
+        console.log('❌ Falha ao salvar credenciais para:', email);
       }
       
       return success;
@@ -63,7 +65,7 @@ class LocalAuthService {
   // Verificar se há credenciais salvas
   async hasStoredCredentials(): Promise<boolean> {
     try {
-      const hasCredentials = await localDatabaseService.hasUserCredentials();
+      const hasCredentials = await localDatabaseService().hasUserCredentials();
       return hasCredentials;
     } catch (error) {
       console.error('❌ Erro ao verificar credenciais armazenadas:', error);
@@ -74,12 +76,12 @@ class LocalAuthService {
   // Obter credenciais salvas por email específico
   async getStoredCredentialsByEmail(email: string): Promise<LocalUserCredentialsLegacy | null> {
     try {
-('📋 Obtendo credenciais salvas do SQLite para:', email);
+      console.log('📋 Obtendo credenciais salvas do SQLite para:', email);
       
-      const credentials = await localDatabaseService.getUserCredentials(email);
+      const credentials = await localDatabaseService().getUserCredentials(email);
       
       if (!credentials) {
-('📋 Nenhuma credencial encontrada para:', email);
+        console.log('📋 Nenhuma credencial encontrada para:', email);
         return null;
       }
 
@@ -92,7 +94,7 @@ class LocalAuthService {
         sessionId: credentials.session_id
       };
 
-('📋 Credenciais obtidas para:', legacyCredentials.email);
+console.log('📋 Credenciais obtidas para:', legacyCredentials.email);
       return legacyCredentials;
     } catch (error) {
       console.error('❌ Erro ao obter credenciais armazenadas:', error);
@@ -103,13 +105,13 @@ class LocalAuthService {
   // Obter credenciais salvas (retorna a primeira credencial encontrada)
   async getStoredCredentials(): Promise<LocalUserCredentialsLegacy | null> {
     try {
-('📋 Obtendo credenciais salvas do SQLite...');
+console.log('📋 Obtendo credenciais salvas do SQLite...');
       
       // Buscar a primeira credencial disponível
-      const credentials = await localDatabaseService.getFirstUserCredentials();
+      const credentials = await localDatabaseService().getFirstUserCredentials();
       
       if (!credentials) {
-('📋 Nenhuma credencial encontrada');
+console.log('📋 Nenhuma credencial encontrada');
         return null;
       }
 
@@ -122,7 +124,7 @@ class LocalAuthService {
         sessionId: credentials.session_id
       };
 
-('📋 Credenciais obtidas para:', legacyCredentials.email);
+console.log('📋 Credenciais obtidas para:', legacyCredentials.email);
       return legacyCredentials;
     } catch (error) {
       console.error('❌ Erro ao obter credenciais armazenadas:', error);
@@ -137,29 +139,40 @@ class LocalAuthService {
     credentials?: LocalUserCredentialsLegacy;
   }> {
     try {
-('🔍 Tentando login offline para:', email);
+      console.log('🔍 Tentando login offline para:', email);
+      
+      // Verificar se o banco de dados está disponível
+      try {
+        await localDatabaseService().waitForInitialization();
+      } catch (dbError) {
+        console.error('❌ Banco de dados não disponível para login offline:', dbError);
+        return {
+          success: false,
+          message: 'Sistema offline temporariamente indisponível. Tente novamente.'
+        };
+      }
       
       const storedCredentials = await this.getStoredCredentialsByEmail(email);
       
       if (!storedCredentials) {
-('❌ Nenhuma credencial salva encontrada para:', email);
+console.log('❌ Nenhuma credencial salva encontrada para:', email);
         return {
           success: false,
           message: 'Nenhuma credencial salva encontrada. Faça login online primeiro.'
         };
       }
 
-('📋 Credenciais encontradas para:', storedCredentials.email);
+console.log('📋 Credenciais encontradas para:', storedCredentials.email);
 
       // Verificar se as credenciais ainda são válidas (último login há menos de 30 dias)
       const lastLogin = new Date(storedCredentials.lastLogin);
       const now = new Date();
       const daysDiff = (now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24);
 
-('📅 Dias desde último login:', daysDiff);
+console.log('📅 Dias desde último login:', daysDiff);
 
       if (daysDiff > 30) {
-('❌ Credenciais expiradas');
+console.log('❌ Credenciais expiradas');
         return {
           success: false,
           message: 'Credenciais expiradas. Faça login online novamente.'
@@ -170,14 +183,14 @@ class LocalAuthService {
       const isPasswordValid = await this.verifyPassword(password, storedCredentials.password);
       
       if (!isPasswordValid) {
-('❌ Senha incorreta');
+console.log('❌ Senha incorreta');
         return {
           success: false,
           message: 'Senha incorreta.'
         };
       }
 
-('✅ Login offline bem-sucedido');
+console.log('✅ Login offline bem-sucedido');
       return {
         success: true,
         message: 'Login offline realizado com sucesso.',
@@ -195,15 +208,15 @@ class LocalAuthService {
   // Atualizar senha quando login online detecta mudança
   async updatePassword(email: string, newPassword: string, sessionId?: string): Promise<boolean> {
     try {
-('🔄 Atualizando senha para:', email);
+console.log('🔄 Atualizando senha para:', email);
       const hashedNewPassword = await this.encryptPassword(newPassword);
       
-      const success = await localDatabaseService.saveUserCredentials(email, hashedNewPassword, sessionId);
+      const success = await localDatabaseService().saveUserCredentials(email, hashedNewPassword, sessionId);
       
       if (success) {
-('✅ Senha atualizada para:', email);
+console.log('✅ Senha atualizada para:', email);
       } else {
-('❌ Falha ao atualizar senha para:', email);
+console.log('❌ Falha ao atualizar senha para:', email);
       }
       
       return success;
@@ -216,13 +229,13 @@ class LocalAuthService {
   // Limpar credenciais (logout)
   async clearCredentials(): Promise<boolean> {
     try {
-('🧹 Limpando credenciais do SQLite...');
-      const success = await localDatabaseService.clearUserCredentials();
+console.log('🧹 Limpando credenciais do SQLite...');
+      const success = await localDatabaseService().clearUserCredentials();
       
       if (success) {
-('✅ Credenciais removidas do SQLite');
+console.log('✅ Credenciais removidas do SQLite');
       } else {
-('❌ Falha ao remover credenciais do SQLite');
+console.log('❌ Falha ao remover credenciais do SQLite');
       }
       
       return success;
@@ -235,18 +248,27 @@ class LocalAuthService {
   // Verificar se pode fazer login offline
   async canLoginOffline(): Promise<boolean> {
     try {
-('🔍 Verificando se pode fazer login offline...');
+      console.log('🔍 Verificando se pode fazer login offline...');
+      
+      // Verificar se o banco de dados está disponível
+      try {
+        await localDatabaseService().waitForInitialization();
+      } catch (dbError) {
+        console.error('❌ Banco de dados não disponível para verificação offline:', dbError);
+        return false;
+      }
+      
       const hasCredentials = await this.hasStoredCredentials();
       
       if (!hasCredentials) {
-('❌ Não há credenciais salvas para login offline');
+        console.log('❌ Não há credenciais salvas para login offline');
         return false;
       }
 
       // Verificar se há pelo menos uma credencial válida
       const credentials = await this.getStoredCredentials();
       if (!credentials) {
-('❌ Não foi possível obter credenciais para verificação');
+        console.log('❌ Não foi possível obter credenciais para verificação');
         return false;
       }
 
@@ -255,7 +277,7 @@ class LocalAuthService {
       const daysDiff = (now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24);
 
       const canLogin = daysDiff <= 30 && credentials.isValidated;
-('🔍 Pode fazer login offline?', canLogin, '(dias:', daysDiff, ')');
+      console.log('🔍 Pode fazer login offline?', canLogin, '(dias:', daysDiff, ')');
       
       return canLogin;
     } catch (error) {

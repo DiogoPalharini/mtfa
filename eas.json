@@ -14,12 +14,32 @@
     "production": {
       "autoIncrement": true
     },
+    "apk": {
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal",
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+      }
+    },
     "local-android": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
       "credentialsSource": "local"
+    },
+    "wsl-android": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
+      },
+      "credentialsSource": "local",
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+      }
     }
   },
   "submit": {

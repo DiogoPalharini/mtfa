@@ -50,39 +50,42 @@ class LocalDatabaseService {
   private isInitialized: boolean = false;
 
   constructor() {
-    this.initDatabase();
+    // Inicializar de forma assíncrona para evitar problemas no APK
+    this.initDatabase().catch(error => {
+      console.error('❌ Erro na inicialização do banco:', error);
+    });
   }
 
-  // Aguardar inicialização do banco
-  private async waitForInitialization(): Promise<void> {
+  // Aguardar inicialização do banco (método público para uso externo)
+  public async waitForInitialization(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+    
     let attempts = 0;
-    while (!this.isInitialized && attempts < 100) { // Aumentei para 100 tentativas (10 segundos)
-      await new Promise(resolve => setTimeout(resolve, 100));
+    while (!this.isInitialized && attempts < 50) {
+      await new Promise(resolve => setTimeout(resolve, 200));
       attempts++;
     }
     
     if (!this.isInitialized) {
-      console.error('❌ Timeout na inicialização do banco de dados após 10 segundos');
-      throw new Error('Timeout na inicialização do banco de dados');
+      throw new Error('Banco de dados não inicializado');
     }
-    
   }
 
   private async initDatabase(): Promise<void> {
     try {
       this.db = await SQLite.openDatabaseAsync('mtfa_local.db');
-      
-('📋 Criando tabelas...');
       await this.createTables();
-      
       this.isInitialized = true;
-('🎉 Banco de dados SQLite inicializado completamente!');
     } catch (error) {
       console.error('❌ Erro ao inicializar banco de dados:', error);
       this.isInitialized = false;
+      this.db = null;
       throw error;
     }
   }
+
 
   private async createTables(): Promise<void> {
     if (!this.db) {
@@ -91,7 +94,7 @@ class LocalDatabaseService {
     }
 
     try {
-('📋 Criando tabelas do banco de dados...');
+      console.log('📋 Criando tabelas do banco de dados...');
       
       // Tabela de carregamentos
       await this.db.execAsync(`
@@ -152,7 +155,7 @@ class LocalDatabaseService {
         CREATE INDEX IF NOT EXISTS idx_user_credentials_last_login ON user_credentials(last_login);
       `);
 
-('✅ Tabelas do banco de dados criadas com sucesso');
+      console.log('✅ Tabelas do banco de dados criadas com sucesso');
     } catch (error) {
       console.error('❌ Erro ao criar tabelas:', error);
       throw error;
@@ -487,7 +490,7 @@ class LocalDatabaseService {
       const id = this.generateId();
       const now = new Date().toISOString();
 
-('💾 Salvando credenciais de usuário no banco local:', { email, hasSessionId: !!sessionId });
+console.log('💾 Salvando credenciais de usuário no banco local:', { email, hasSessionId: !!sessionId });
 
       // Verificar se já existe credencial para este email
       const existing = await this.db.getFirstAsync(
@@ -506,7 +509,7 @@ class LocalDatabaseService {
            WHERE email = ?`,
           [passwordHash, sessionId, now, email]
         );
-('✅ Credenciais de usuário atualizadas:', email);
+console.log('✅ Credenciais de usuário atualizadas:', email);
       } else {
         // Inserir novas credenciais
         await this.db.runAsync(
@@ -514,7 +517,7 @@ class LocalDatabaseService {
            VALUES (?, ?, ?, ?, ?, 1, ?)`,
           [id, email, passwordHash, sessionId, now, now]
         );
-('✅ Credenciais de usuário salvas:', email);
+console.log('✅ Credenciais de usuário salvas:', email);
       }
 
       return true;
@@ -540,9 +543,9 @@ class LocalDatabaseService {
       ) as LocalUserCredentials | null;
 
       if (result) {
-('📋 Credenciais encontradas para:', email);
+console.log('📋 Credenciais encontradas para:', email);
       } else {
-('❌ Nenhuma credencial encontrada para:', email);
+console.log('❌ Nenhuma credencial encontrada para:', email);
       }
 
       return result;
@@ -567,9 +570,9 @@ class LocalDatabaseService {
       ) as LocalUserCredentials | null;
 
       if (result) {
-('📋 Primeira credencial encontrada para:', result.email);
+console.log('📋 Primeira credencial encontrada para:', result.email);
       } else {
-('❌ Nenhuma credencial encontrada');
+console.log('❌ Nenhuma credencial encontrada');
       }
 
       return result;
@@ -594,7 +597,7 @@ class LocalDatabaseService {
       ) as { count: number };
 
       const hasCredentials = result.count > 0;
-('🔍 Tem credenciais salvas?', hasCredentials);
+console.log('🔍 Tem credenciais salvas?', hasCredentials);
       return hasCredentials;
     } catch (error) {
       console.error('❌ Erro ao verificar credenciais de usuário:', error);
@@ -612,7 +615,7 @@ class LocalDatabaseService {
       const now = new Date();
       const daysDiff = (now.getTime() - lastLogin.getTime()) / (1000 * 60 * 60 * 24);
 
-('📅 Dias desde último login:', daysDiff);
+console.log('📅 Dias desde último login:', daysDiff);
       return daysDiff <= 30 && credentials.is_validated;
     } catch (error) {
       console.error('❌ Erro ao verificar validade das credenciais:', error);
@@ -631,7 +634,7 @@ class LocalDatabaseService {
       }
 
       await this.db.runAsync(`DELETE FROM user_credentials`);
-('✅ Credenciais de usuário removidas');
+console.log('✅ Credenciais de usuário removidas');
       return true;
     } catch (error) {
       console.error('❌ Erro ao limpar credenciais de usuário:', error);
@@ -701,4 +704,12 @@ class LocalDatabaseService {
 }
 
 // Instância singleton do serviço
-export const localDatabaseService = new LocalDatabaseService();
+// Instanciar o serviço de forma lazy para evitar problemas no APK
+let _localDatabaseService: LocalDatabaseService | null = null;
+
+export const localDatabaseService = (): LocalDatabaseService => {
+  if (!_localDatabaseService) {
+    _localDatabaseService = new LocalDatabaseService();
+  }
+  return _localDatabaseService;
+};
