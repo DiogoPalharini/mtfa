@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localDatabaseService, LocalUserCredentials } from './localDatabaseService';
 
 export interface LocalUserCredentialsLegacy {
@@ -46,9 +47,16 @@ class LocalAuthService {
   async saveCredentials(email: string, password: string, sessionId?: string): Promise<boolean> {
     try {
       const hashedPassword = await this.encryptPassword(password);
-      
+      // Persistir no SQLite
       const success = await localDatabaseService().saveUserCredentials(email, hashedPassword, sessionId);
-      
+      // Persistência redundante no AsyncStorage (fallback para APK)
+      try {
+        await AsyncStorage.setItem(
+          'offline_credentials',
+          JSON.stringify({ email, password_hash: hashedPassword, session_id: sessionId, last_login: new Date().toISOString(), is_validated: true })
+        );
+      } catch {}
+
       if (success) {
         console.log('✅ Credenciais salvas com sucesso para:', email);
       } else {
@@ -152,7 +160,26 @@ console.log('📋 Credenciais obtidas para:', legacyCredentials.email);
         };
       }
       
-      const storedCredentials = await this.getStoredCredentialsByEmail(email);
+      let storedCredentials = await this.getStoredCredentialsByEmail(email);
+      
+      // Fallback: tentar obter do AsyncStorage se banco falhar/no data
+      if (!storedCredentials) {
+        try {
+          const json = await AsyncStorage.getItem('offline_credentials');
+          if (json) {
+            const parsed = JSON.parse(json);
+            if (parsed?.email === email) {
+              storedCredentials = {
+                email: parsed.email,
+                password: parsed.password_hash,
+                lastLogin: parsed.last_login ?? new Date().toISOString(),
+                isValidated: parsed.is_validated ?? true,
+                sessionId: parsed.session_id,
+              };
+            }
+          }
+        } catch {}
+      }
       
       if (!storedCredentials) {
 console.log('❌ Nenhuma credencial salva encontrada para:', email);
@@ -212,6 +239,12 @@ console.log('🔄 Atualizando senha para:', email);
       const hashedNewPassword = await this.encryptPassword(newPassword);
       
       const success = await localDatabaseService().saveUserCredentials(email, hashedNewPassword, sessionId);
+      try {
+        await AsyncStorage.setItem(
+          'offline_credentials',
+          JSON.stringify({ email, password_hash: hashedNewPassword, session_id: sessionId, last_login: new Date().toISOString(), is_validated: true })
+        );
+      } catch {}
       
       if (success) {
 console.log('✅ Senha atualizada para:', email);
@@ -231,6 +264,9 @@ console.log('❌ Falha ao atualizar senha para:', email);
     try {
 console.log('🧹 Limpando credenciais do SQLite...');
       const success = await localDatabaseService().clearUserCredentials();
+      try {
+        await AsyncStorage.removeItem('offline_credentials');
+      } catch {}
       
       if (success) {
 console.log('✅ Credenciais removidas do SQLite');
