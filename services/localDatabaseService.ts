@@ -86,6 +86,21 @@ class LocalDatabaseService {
     }
   }
 
+  // Tentar reabrir o banco se algo falhou/fechou
+  public async ensureInitialized(): Promise<void> {
+    if (this.isInitialized && this.db) return;
+    try {
+      this.db = await SQLite.openDatabaseAsync('mtfa_local.db');
+      await this.createTables();
+      this.isInitialized = true;
+    } catch (error) {
+      console.error('❌ Falha ao reabrir o banco:', error);
+      this.isInitialized = false;
+      this.db = null;
+      throw error;
+    }
+  }
+
 
   private async createTables(): Promise<void> {
     if (!this.db) {
@@ -171,7 +186,9 @@ class LocalDatabaseService {
   async saveTruckLoad(formData: TruckLoadFormData): Promise<{ success: boolean; id: string; message: string }> {
     try {
       await this.waitForInitialization();
-      
+      if (!this.db) {
+        await this.ensureInitialized();
+      }
       if (!this.db) {
         console.error('❌ Banco de dados não inicializado');
         return { success: false, id: '', message: 'Database not initialized' };
@@ -182,7 +199,8 @@ class LocalDatabaseService {
 
 ('💾 Salvando carregamento no banco local:', { id, truck: formData.truck, farm: formData.farm });
 
-      await this.db.runAsync(
+      await this.db.withTransactionAsync(async () => {
+        await this.db!.runAsync(
         `INSERT INTO truck_loads (
           id, reg_date, reg_time, truck, othertruck, farm, otherfarm, 
           field, otherfield, variety, othervariety, driver, otherdriver,
@@ -211,7 +229,8 @@ class LocalDatabaseService {
           'pending',
           now
         ]
-      );
+        );
+      });
 
 ('✅ Carregamento salvo localmente com sucesso:', id);
       return {
@@ -289,7 +308,10 @@ class LocalDatabaseService {
   async saveDropdownData(type: string, value: string): Promise<boolean> {
     try {
       await this.waitForInitialization();
-      
+      if (!this.db) {
+        // Tentar reabrir o banco e seguir
+        await this.ensureInitialized();
+      }
       if (!this.db) {
         console.error('❌ Banco de dados não inicializado para saveDropdownData');
         return false;
@@ -316,10 +338,13 @@ class LocalDatabaseService {
         return true; // Já existe
       }
 
-      await this.db.runAsync(
-        `INSERT INTO dropdown_data (id, type, value, created_at) VALUES (?, ?, ?, ?)`,
-        [id, type, value, now]
-      );
+      // Garantir consistência com uma transação
+      await this.db.withTransactionAsync(async () => {
+        await this.db!.runAsync(
+          `INSERT INTO dropdown_data (id, type, value, created_at) VALUES (?, ?, ?, ?)`,
+          [id, type, value, now]
+        );
+      });
 
 (`✅ Item de dropdown "${value}" (${type}) salvo localmente com ID: ${id}`);
       

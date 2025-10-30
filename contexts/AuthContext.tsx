@@ -337,6 +337,14 @@ console.log('✅ Logout concluído');
 
   const checkSession = async (): Promise<boolean> => {
     try {
+      // Se estiver em modo offline, considerar sessão válida
+      try {
+        const offlineMode = await AsyncStorage.getItem('offline_mode');
+        if (offlineMode === 'true') {
+          return true;
+        }
+      } catch {}
+
       // Usar o sistema híbrido para verificar se o usuário está logado
       const isLoggedIn = hybridAuthService.isLoggedIn();
       
@@ -347,6 +355,13 @@ console.log('✅ Logout concluído');
       return isLoggedIn;
     } catch (error) {
       console.error('Erro ao verificar sessão:', error);
+      // Em erro de verificação, se modo offline estiver ativo, permitir
+      try {
+        const offlineMode = await AsyncStorage.getItem('offline_mode');
+        if (offlineMode === 'true') {
+          return true;
+        }
+      } catch {}
       await clearAuthData();
       return false;
     }
