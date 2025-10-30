@@ -6,7 +6,10 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:bundle": "npx expo export --platform android",
+    "build:android:local": "npm run build:bundle && eas build --profile local-android --platform android --local",
+    "build:android:apk": "npm run build:bundle && eas build --profile apk --platform android --local"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",

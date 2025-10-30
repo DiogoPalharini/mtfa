@@ -26,9 +26,13 @@
     "local-android": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
       },
-      "credentialsSource": "local"
+      "credentialsSource": "local",
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+      }
     },
     "wsl-android": {
       "distribution": "internal",

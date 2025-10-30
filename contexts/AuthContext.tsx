@@ -70,6 +70,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (hasLocalCredentials) {
         // Não há usuário logado, mas há credenciais locais
         console.log('🔍 Sem usuário logado, mas há credenciais locais disponíveis');
+        
+        // Tentar restaurar dados do usuário salvos no AsyncStorage
+        try {
+          const savedUserData = await AsyncStorage.getItem('userData');
+          const savedHybridUser = await AsyncStorage.getItem('hybrid_user');
+          const offlineMode = await AsyncStorage.getItem('offline_mode');
+          
+          if (savedUserData || savedHybridUser) {
+            const userData = savedUserData ? JSON.parse(savedUserData) : JSON.parse(savedHybridUser!);
+            
+            // Verificar se os dados do usuário são válidos
+            if (userData && userData.email) {
+              console.log('✅ Restaurando dados do usuário salvos para modo offline:', userData.email);
+              setUser(userData as CloudUser);
+              setIsAuthenticated(true);
+              console.log('✅ Usuário autenticado via dados salvos offline');
+            }
+          } else if (offlineMode === 'true') {
+            // Modo offline ativo mas sem dados, tentar obter da primeira credencial
+            const credentials = await localAuthService.getStoredCredentials();
+            if (credentials) {
+              const userData: CloudUser = {
+                id: 0,
+                name: credentials.email.split('@')[0] || credentials.email,
+                email: credentials.email,
+                level: 'Licencee'
+              };
+              
+              await Promise.all([
+                AsyncStorage.setItem('userData', JSON.stringify(userData)),
+                AsyncStorage.setItem('hybrid_user', JSON.stringify(userData))
+              ]);
+              
+              setUser(userData);
+              setIsAuthenticated(true);
+              console.log('✅ Usuário restaurado via credenciais locais para modo offline');
+            }
+          }
+        } catch (restoreError) {
+          console.error('❌ Erro ao restaurar dados do usuário:', restoreError);
+          // Continuar sem restaurar, permitir login offline manual
+        }
+        
         // Não limpar dados, permitir login offline
       } else {
         // Não há nem usuário logado nem credenciais locais
@@ -92,8 +135,13 @@ console.log('⚠️ Erro na verificação, mantendo estado atual');
 
   const clearAuthData = async () => {
     try {
-      await AsyncStorage.removeItem('userData');
-      await hybridAuthService.logout();
+      // Limpar dados de autenticação, mas manter credenciais locais para login offline
+      await Promise.all([
+        AsyncStorage.removeItem('userData'),
+        AsyncStorage.removeItem('hybrid_user'),
+        hybridAuthService.logout()
+      ]);
+      
       // NÃO limpar credenciais locais aqui - elas devem persistir para login offline
       // await localAuthService.clearCredentials(); // Removido
       setUser(null);
@@ -154,11 +202,15 @@ console.log('🔐 Iniciando processo de login para:', username);
           // Login híbrido bem-sucedido - salvar credenciais localmente
           console.log('✅ Login híbrido bem-sucedido, salvando credenciais...');
           
-          const credentialsSaved = await localAuthService.saveCredentials(username, password, 'session_id');
+          const credentialsSaved = await localAuthService.saveCredentials(username, password, hybridResult.sessionCookie);
           console.log('💾 Credenciais salvas:', credentialsSaved);
           
-          // Salvar dados do usuário
-          await AsyncStorage.setItem('userData', JSON.stringify(hybridResult.user));
+          // Salvar dados do usuário e limpar flag de modo offline
+          await Promise.all([
+            AsyncStorage.setItem('userData', JSON.stringify(hybridResult.user)),
+            AsyncStorage.removeItem('offline_mode')
+          ]);
+          
           setUser(hybridResult.user);
           setIsAuthenticated(true);
           
@@ -182,16 +234,19 @@ console.log('🔐 Iniciando processo de login para:', username);
             console.log('✅ Login offline bem-sucedido, configurando dados do usuário...');
             const userData: CloudUser = {
               id: 0, // ID temporário para login offline
-              username: offlineResult.credentials.email,
-              name: offlineResult.credentials.email,
+              name: offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
               email: offlineResult.credentials.email,
-              created_at: new Date().toISOString(),
-              sessionId: offlineResult.credentials.sessionId
+              level: 'Licencee' // Padrão para login offline
             };
             
             // Salvar dados do usuário no AsyncStorage para persistência
+            // Salvar tanto em userData quanto nos campos do HybridAuthService para compatibilidade
             try {
-              await AsyncStorage.setItem('userData', JSON.stringify(userData));
+              await Promise.all([
+                AsyncStorage.setItem('userData', JSON.stringify(userData)),
+                AsyncStorage.setItem('hybrid_user', JSON.stringify(userData)),
+                AsyncStorage.setItem('offline_mode', 'true')
+              ]);
               console.log('💾 Dados do usuário salvos no AsyncStorage para login offline');
             } catch (storageError) {
               console.error('❌ Erro ao salvar dados do usuário:', storageError);
@@ -220,16 +275,19 @@ console.log('🔐 Iniciando processo de login para:', username);
           console.log('✅ Login offline bem-sucedido (segundo caso), configurando dados do usuário...');
           const userData: CloudUser = {
             id: 0, // ID temporário para login offline
-            username: offlineResult.credentials.email,
-            name: offlineResult.credentials.email,
+            name: offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
             email: offlineResult.credentials.email,
-            created_at: new Date().toISOString(),
-            sessionId: offlineResult.credentials.sessionId
+            level: 'Licencee' // Padrão para login offline
           };
           
           // Salvar dados do usuário no AsyncStorage para persistência
+          // Salvar tanto em userData quanto nos campos do HybridAuthService para compatibilidade
           try {
-            await AsyncStorage.setItem('userData', JSON.stringify(userData));
+            await Promise.all([
+              AsyncStorage.setItem('userData', JSON.stringify(userData)),
+              AsyncStorage.setItem('hybrid_user', JSON.stringify(userData)),
+              AsyncStorage.setItem('offline_mode', 'true')
+            ]);
             console.log('💾 Dados do usuário salvos no AsyncStorage para login offline (segundo caso)');
           } catch (storageError) {
             console.error('❌ Erro ao salvar dados do usuário:', storageError);
@@ -259,6 +317,14 @@ console.log('🔐 Iniciando processo de login para:', username);
 console.log('🚪 Fazendo logout...');
       await clearAuthData();
       await localAuthService.clearCredentials(); // Limpar credenciais SQLite no logout explícito
+      
+      // Limpar também a flag de modo offline
+      try {
+        await AsyncStorage.removeItem('offline_mode');
+      } catch (error) {
+        // Ignorar erro se não existir
+      }
+      
       setUser(null);
       setIsAuthenticated(false);
 console.log('✅ Logout concluído');
