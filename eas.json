@@ -26,8 +26,7 @@
     "local-android": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "buildType": "apk"
       },
       "credentialsSource": "local",
       "env": {
@@ -37,8 +36,7 @@
     "wsl-android": {
       "distribution": "internal",
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease"
+        "buildType": "apk"
       },
       "credentialsSource": "local",
       "env": {
