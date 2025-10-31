@@ -732,9 +732,16 @@ console.log('✅ Credenciais de usuário removidas');
 // Instanciar o serviço de forma lazy para evitar problemas no APK
 let _localDatabaseService: LocalDatabaseService | null = null;
 
-export const localDatabaseService = (): LocalDatabaseService => {
-  if (!_localDatabaseService) {
-    _localDatabaseService = new LocalDatabaseService();
+// Criar um objeto proxy que inicializa o serviço quando necessário
+export const localDatabaseService = new Proxy({} as LocalDatabaseService, {
+  get(target, prop) {
+    if (!_localDatabaseService) {
+      _localDatabaseService = new LocalDatabaseService();
+    }
+    const value = (_localDatabaseService as any)[prop];
+    if (typeof value === 'function') {
+      return value.bind(_localDatabaseService);
+    }
+    return value;
   }
-  return _localDatabaseService;
-};
+});

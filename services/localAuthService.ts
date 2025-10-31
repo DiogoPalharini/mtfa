@@ -48,7 +48,7 @@ class LocalAuthService {
     try {
       const hashedPassword = await this.encryptPassword(password);
       // Persistir no SQLite
-      const success = await localDatabaseService().saveUserCredentials(email, hashedPassword, sessionId);
+      const success = await localDatabaseService.saveUserCredentials(email, hashedPassword, sessionId);
       // Persistência redundante no AsyncStorage (fallback para APK)
       try {
         await AsyncStorage.setItem(
@@ -73,7 +73,7 @@ class LocalAuthService {
   // Verificar se há credenciais salvas
   async hasStoredCredentials(): Promise<boolean> {
     try {
-      const hasCredentials = await localDatabaseService().hasUserCredentials();
+      const hasCredentials = await localDatabaseService.hasUserCredentials();
       return hasCredentials;
     } catch (error) {
       console.error('❌ Erro ao verificar credenciais armazenadas:', error);
@@ -86,7 +86,7 @@ class LocalAuthService {
     try {
       console.log('📋 Obtendo credenciais salvas do SQLite para:', email);
       
-      const credentials = await localDatabaseService().getUserCredentials(email);
+      const credentials = await localDatabaseService.getUserCredentials(email);
       
       if (!credentials) {
         console.log('📋 Nenhuma credencial encontrada para:', email);
@@ -116,7 +116,7 @@ console.log('📋 Credenciais obtidas para:', legacyCredentials.email);
 console.log('📋 Obtendo credenciais salvas do SQLite...');
       
       // Buscar a primeira credencial disponível
-      const credentials = await localDatabaseService().getFirstUserCredentials();
+      const credentials = await localDatabaseService.getFirstUserCredentials();
       
       if (!credentials) {
 console.log('📋 Nenhuma credencial encontrada');
@@ -151,7 +151,7 @@ console.log('📋 Credenciais obtidas para:', legacyCredentials.email);
       
       // Verificar se o banco de dados está disponível
       try {
-        await localDatabaseService().waitForInitialization();
+        await localDatabaseService.waitForInitialization();
       } catch (dbError) {
         console.error('❌ Banco de dados não disponível para login offline:', dbError);
         return {
@@ -238,7 +238,7 @@ console.log('✅ Login offline bem-sucedido');
 console.log('🔄 Atualizando senha para:', email);
       const hashedNewPassword = await this.encryptPassword(newPassword);
       
-      const success = await localDatabaseService().saveUserCredentials(email, hashedNewPassword, sessionId);
+      const success = await localDatabaseService.saveUserCredentials(email, hashedNewPassword, sessionId);
       try {
         await AsyncStorage.setItem(
           'offline_credentials',
@@ -263,7 +263,7 @@ console.log('❌ Falha ao atualizar senha para:', email);
   async clearCredentials(): Promise<boolean> {
     try {
 console.log('🧹 Limpando credenciais do SQLite...');
-      const success = await localDatabaseService().clearUserCredentials();
+      const success = await localDatabaseService.clearUserCredentials();
       try {
         await AsyncStorage.removeItem('offline_credentials');
       } catch {}
@@ -288,7 +288,7 @@ console.log('❌ Falha ao remover credenciais do SQLite');
       
       // Verificar se o banco de dados está disponível
       try {
-        await localDatabaseService().waitForInitialization();
+        await localDatabaseService.waitForInitialization();
       } catch (dbError) {
         console.error('❌ Banco de dados não disponível para verificação offline:', dbError);
         return false;

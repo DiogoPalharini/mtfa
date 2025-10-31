@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { hybridAuthService, CloudUser } from '../services/HybridAuthService';
 import { localAuthService } from '../services/localAuthService';
 import { syncService } from '../services/syncService';
 import { useErrorTranslations } from '../hooks/useErrorTranslations';
+import { useLanguage } from './LanguageContext';
+import { commonI18n } from '../i18n/common';
 
 interface AuthContextValue {
   user: CloudUser | null;
@@ -21,6 +24,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { t } = useErrorTranslations();
+  const { language } = useLanguage();
+  const commonT = commonI18n[language];
 
   // Verificar sessão salva na inicialização
   useEffect(() => {
@@ -180,13 +185,71 @@ console.log('⚠️ Erro na verificação, mantendo estado atual');
     }
   };
 
+  // Função auxiliar para verificar conectividade rapidamente
+  const checkInternetConnection = async (): Promise<boolean> => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // Timeout rápido de 2 segundos
+      
+      const response = await fetch('https://mtfa.freenetic.ch', {
+        method: 'HEAD',
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  };
+
   const login = async (username: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
       setIsLoading(true);
       
 console.log('🔐 Iniciando processo de login para:', username);
       
-      // Usar sistema híbrido para login
+      // Verificar conectividade antes de tentar login online
+      const hasInternet = await checkInternetConnection();
+      console.log('🌐 Tem internet?', hasInternet);
+      
+      // Se não tem internet, ir direto para login offline
+      if (!hasInternet) {
+        console.log('📡 Sem internet, tentando login offline diretamente...');
+        const offlineResult = await localAuthService.validateOfflineLogin(username, password);
+        
+        if (offlineResult.success && offlineResult.credentials) {
+          // Login offline bem-sucedido
+          console.log('✅ Login offline bem-sucedido (sem internet), configurando dados do usuário...');
+          const userData: CloudUser = {
+            id: 0,
+            name: offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
+            email: offlineResult.credentials.email,
+            level: 'Licencee'
+          };
+          
+          try {
+            await Promise.all([
+              AsyncStorage.setItem('userData', JSON.stringify(userData)),
+              AsyncStorage.setItem('hybrid_user', JSON.stringify(userData)),
+              AsyncStorage.setItem('offline_mode', 'true')
+            ]);
+            console.log('💾 Dados do usuário salvos no AsyncStorage para login offline');
+          } catch (storageError) {
+            console.error('❌ Erro ao salvar dados do usuário:', storageError);
+          }
+          
+          setUser(userData);
+          setIsAuthenticated(true);
+          
+          console.log('🎉 Login offline concluído com sucesso (sem internet)!');
+          return { success: true, message: t('loginSuccess') };
+        } else {
+          return { success: false, message: offlineResult.message || t('loginFailed') };
+        }
+      }
+      
+      // Se tem internet, tentar login online primeiro
       try {
         const hybridResult = await hybridAuthService.login(username, password);
         

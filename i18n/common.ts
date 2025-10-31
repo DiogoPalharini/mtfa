@@ -64,6 +64,8 @@ export const commonI18n: Record<LanguageCode, Record<string, string>> = {
     logout: 'Sair',
     // Success messages
     ok: 'OK',
+    loginSaved: 'Login Salvo',
+    loginSavedMessage: 'Suas credenciais foram salvas no SQLite. Você poderá fazer login offline.',
     // Error messages
     unexpectedError: 'Erro inesperado ao salvar carregamento.',
     invalidValue: 'Por favor, digite um valor válido.',
@@ -131,6 +133,8 @@ export const commonI18n: Record<LanguageCode, Record<string, string>> = {
     logout: 'Logout',
     // Success messages
     ok: 'OK',
+    loginSaved: 'Login Saved',
+    loginSavedMessage: 'Your credentials have been saved to SQLite. You will be able to login offline.',
     // Error messages
     unexpectedError: 'Unexpected error while saving load.',
     invalidValue: 'Please enter a valid value.',
@@ -198,6 +202,8 @@ export const commonI18n: Record<LanguageCode, Record<string, string>> = {
     logout: 'Abmelden',
     // Success messages
     ok: 'OK',
+    loginSaved: 'Anmeldung gespeichert',
+    loginSavedMessage: 'Ihre Anmeldedaten wurden im SQLite gespeichert. Sie können sich offline anmelden.',
     // Error messages
     unexpectedError: 'Unerwarteter Fehler beim Speichern der Ladung.',
     invalidValue: 'Bitte geben Sie einen gültigen Wert ein.',
