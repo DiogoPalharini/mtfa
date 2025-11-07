@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, StyleSheet, Text, View, TouchableOpacity, ScrollView } from 'react-native';
+import { Modal, StyleSheet, Text, View, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { LoadItem } from './LoadCard';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -58,7 +58,17 @@ export default function LoadDetailsModal({ visible, item, onClose }: Props) {
               <Ionicons name="close" size={22} color={TEXT} />
             </TouchableOpacity>
           </View>
-          <ScrollView contentContainerStyle={{ paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
+          
+          {/* --- INÍCIO DA CORREÇÃO ---
+            A View com "styles.scrollContainer" foi removida
+            e o estilo foi aplicado diretamente ao ScrollView.
+            A propriedade "nestedScrollEnabled" foi removida.
+          */}
+          <ScrollView
+            style={styles.scrollContainer} 
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Informações Básicas */}
             <Text style={styles.sectionTitle}>{t.basicInfo}</Text>
             <Row label={t.dateTime} value={formatDateTime(item.date, item.time)} icon="calendar-outline" />
@@ -106,6 +116,8 @@ export default function LoadDetailsModal({ visible, item, onClose }: Props) {
             <Row label={t.createdAt} value={item.created_at ? formatSyncDate(item.created_at) : t.notAvailable} icon="time-outline" />
             <Row label={t.syncedAt} value={formatSyncDate(item.synced_at)} icon="cloud-done-outline" />
           </ScrollView>
+          {/* --- FIM DA CORREÇÃO --- */}
+
         </View>
       </View>
     </Modal>
@@ -124,6 +136,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     padding: 16,
     maxHeight: '85%',
+    width: '100%',
   },
   header: {
     flexDirection: 'row',
@@ -159,5 +172,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 8,
     marginLeft: 4,
+  },
+  scrollContainer: { // Este estilo agora é aplicado ao ScrollView
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: Platform.OS === 'android' ? 150 : 40,
+    paddingTop: 4,
   },
 });

@@ -296,77 +296,79 @@ export default function HomeScreen() {
 
   return (
     <ProtectedRoute>
-      <View style={styles.container}>
-        <AppHeader 
-          projectName="MTFA" 
-          showBack={false}
-          showSync={true}
-          isSyncing={isSyncing}
-          onSyncPress={handleSyncNow}
-          onLogoutPress={handleLogout}
-        />
+      <>
+        <View style={styles.container}>
+          <AppHeader 
+            projectName="MTFA" 
+            showBack={false}
+            showSync={true}
+            isSyncing={isSyncing}
+            onSyncPress={handleSyncNow}
+            onLogoutPress={handleLogout}
+          />
 
-        <View style={styles.content}>
-          <Text style={styles.welcome}>
-            {t.welcome.replace('{user}', user?.name || user?.email || 'Usuário')}
-          </Text>
-
-        <View style={styles.syncCard}>
-          <View style={styles.syncCardContent}>
-            <Ionicons 
-              name={
-                isAutoSyncing ? 'sync' : 
-                pending === 0 ? 'checkmark-circle' : 'alert-circle'
-              } 
-              size={18} 
-              color={isAutoSyncing ? PRIMARY : syncColor} 
-            />
-            <Text style={[styles.syncMessage, { color: isAutoSyncing ? PRIMARY : syncColor }]}>
-              {isAutoSyncing ? t.syncingAutomatically : syncText}
+          <View style={styles.content}>
+            <Text style={styles.welcome}>
+              {t.welcome.replace('{user}', user?.name || user?.email || 'Usuário')}
             </Text>
+
+          <View style={styles.syncCard}>
+            <View style={styles.syncCardContent}>
+              <Ionicons 
+                name={
+                  isAutoSyncing ? 'sync' : 
+                  pending === 0 ? 'checkmark-circle' : 'alert-circle'
+                } 
+                size={18} 
+                color={isAutoSyncing ? PRIMARY : syncColor} 
+              />
+              <Text style={[styles.syncMessage, { color: isAutoSyncing ? PRIMARY : syncColor }]}>
+                {isAutoSyncing ? t.syncingAutomatically : syncText}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => router.push('/create')}
+            style={styles.createButton}
+          >
+            <Ionicons name="add-circle" size={22} color="#FFFFFF" />
+            <Text style={styles.createButtonText}>{t.createEntry}</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.sectionTitle}>{t.recentLoads}</Text>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>{t.loadingLoads}</Text>
+            </View>
+          ) : truckLoads.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="document-outline" size={48} color={TEXT_SECONDARY} />
+              <Text style={styles.emptyText}>{t.noLoadsFound}</Text>
+              <Text style={styles.emptySubtext}>{t.createFirstLoad}</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={truckLoads}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <LoadCard item={item} onPress={(load) => { setSelectedLoad(load); setDetailsVisible(true); }} />
+              )}
+              ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+              contentContainerStyle={{ paddingBottom: Platform.OS === 'android' ? 120 : 80 }}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
           </View>
         </View>
 
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => router.push('/create')}
-          style={styles.createButton}
-        >
-          <Ionicons name="add-circle" size={22} color="#FFFFFF" />
-          <Text style={styles.createButtonText}>{t.createEntry}</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.sectionTitle}>{t.recentLoads}</Text>
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>{t.loadingLoads}</Text>
-          </View>
-        ) : truckLoads.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="document-outline" size={48} color={TEXT_SECONDARY} />
-            <Text style={styles.emptyText}>{t.noLoadsFound}</Text>
-            <Text style={styles.emptySubtext}>{t.createFirstLoad}</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={truckLoads}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <LoadCard item={item} onPress={(load) => { setSelectedLoad(load); setDetailsVisible(true); }} />
-            )}
-            ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
-            contentContainerStyle={{ paddingBottom: Platform.OS === 'android' ? 120 : 80 }}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
-
-      <LoadDetailsModal
-        visible={detailsVisible}
-        item={selectedLoad}
-        onClose={() => setDetailsVisible(false)}
-      />
-    </View>
+        <LoadDetailsModal
+          visible={detailsVisible}
+          item={selectedLoad}
+          onClose={() => setDetailsVisible(false)}
+        />
+      </>
     </ProtectedRoute>
   );
 }
