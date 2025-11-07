@@ -93,24 +93,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               console.log('✅ Usuário autenticado via dados salvos offline');
             }
           } else if (offlineMode === 'true') {
-            // Modo offline ativo mas sem dados, tentar obter da primeira credencial
-            const credentials = await localAuthService.getStoredCredentials();
-            if (credentials) {
-              const userData: CloudUser = {
-                id: 0,
-                name: credentials.email.split('@')[0] || credentials.email,
-                email: credentials.email,
-                level: 'Licencee'
-              };
-              
-              await Promise.all([
-                AsyncStorage.setItem('userData', JSON.stringify(userData)),
-                AsyncStorage.setItem('hybrid_user', JSON.stringify(userData))
-              ]);
-              
-              setUser(userData);
-              setIsAuthenticated(true);
-              console.log('✅ Usuário restaurado via credenciais locais para modo offline');
+            const activeOfflineEmail = await AsyncStorage.getItem('offline_active_email');
+            if (activeOfflineEmail) {
+              const credentials = await localAuthService.getStoredCredentialsByEmail(activeOfflineEmail);
+              if (credentials) {
+                const userData: CloudUser = {
+                  id: 0,
+                  name: credentials.name || credentials.email.split('@')[0] || credentials.email,
+                  email: credentials.email,
+                  level: 'Licencee'
+                };
+
+                await Promise.all([
+                  AsyncStorage.setItem('userData', JSON.stringify(userData)),
+                  AsyncStorage.setItem('hybrid_user', JSON.stringify(userData))
+                ]);
+
+                setUser(userData);
+                setIsAuthenticated(true);
+                console.log('✅ Usuário restaurado via email ativo para modo offline');
+              }
             }
           }
         } catch (restoreError) {
@@ -144,6 +146,7 @@ console.log('⚠️ Erro na verificação, mantendo estado atual');
       await Promise.all([
         AsyncStorage.removeItem('userData'),
         AsyncStorage.removeItem('hybrid_user'),
+        AsyncStorage.removeItem('offline_active_email'),
         hybridAuthService.logout()
       ]);
       
@@ -162,7 +165,12 @@ console.log('⚠️ Erro na verificação, mantendo estado atual');
       console.log('🔄 Iniciando sincronização automática após login online...');
       
       // Verificar se há itens pendentes para sincronizar
-      const stats = await syncService.getStats();
+      if (!user?.email) {
+        console.warn('⚠️ Não há email do usuário disponível para sincronização automática');
+        return;
+      }
+
+      const stats = await syncService.getStats(user.email);
       console.log('📊 Estatísticas de sincronização:', stats);
       
       if (stats.pending > 0) {
@@ -171,7 +179,7 @@ console.log('⚠️ Erro na verificação, mantendo estado atual');
         // Executar sincronização em background (não bloquear a UI)
         setTimeout(async () => {
           try {
-            const syncResult = await syncService.syncAllPendingLoads();
+            const syncResult = await syncService.syncAllPendingLoads(user.email);
             console.log('✅ Sincronização automática concluída:', syncResult);
           } catch (error) {
             console.error('❌ Erro na sincronização automática:', error);
@@ -208,6 +216,8 @@ console.log('⚠️ Erro na verificação, mantendo estado atual');
       setIsLoading(true);
       
 console.log('🔐 Iniciando processo de login para:', username);
+
+      const normalizedUsername = username.toLowerCase().trim();
       
       // Verificar conectividade antes de tentar login online
       const hasInternet = await checkInternetConnection();
@@ -223,17 +233,18 @@ console.log('🔐 Iniciando processo de login para:', username);
           console.log('✅ Login offline bem-sucedido (sem internet), configurando dados do usuário...');
           const userData: CloudUser = {
             id: 0,
-            name: offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
+            name: offlineResult.credentials.name || offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
             email: offlineResult.credentials.email,
             level: 'Licencee'
           };
           
           try {
-            await Promise.all([
-              AsyncStorage.setItem('userData', JSON.stringify(userData)),
-              AsyncStorage.setItem('hybrid_user', JSON.stringify(userData)),
-              AsyncStorage.setItem('offline_mode', 'true')
-            ]);
+          await Promise.all([
+            AsyncStorage.setItem('userData', JSON.stringify(userData)),
+            AsyncStorage.setItem('hybrid_user', JSON.stringify(userData)),
+            AsyncStorage.setItem('offline_mode', 'true'),
+            AsyncStorage.setItem('offline_active_email', userData.email.toLowerCase().trim())
+          ]);
             console.log('💾 Dados do usuário salvos no AsyncStorage para login offline');
           } catch (storageError) {
             console.error('❌ Erro ao salvar dados do usuário:', storageError);
@@ -265,13 +276,24 @@ console.log('🔐 Iniciando processo de login para:', username);
           // Login híbrido bem-sucedido - salvar credenciais localmente
           console.log('✅ Login híbrido bem-sucedido, salvando credenciais...');
           
-          const credentialsSaved = await localAuthService.saveCredentials(username, password, hybridResult.sessionCookie);
+          // Salvar credenciais com email, senha, sessionId e nome do usuário
+          const credentialsSaved = await localAuthService.saveCredentials(
+            username, 
+            password, 
+            hybridResult.sessionCookie,
+            hybridResult.user.name
+          );
           console.log('💾 Credenciais salvas:', credentialsSaved);
+          
+          if (!credentialsSaved) {
+            console.error('⚠️ AVISO: Falha ao salvar credenciais para login offline!');
+          }
           
           // Salvar dados do usuário e limpar flag de modo offline
           await Promise.all([
             AsyncStorage.setItem('userData', JSON.stringify(hybridResult.user)),
-            AsyncStorage.removeItem('offline_mode')
+            AsyncStorage.removeItem('offline_mode'),
+            AsyncStorage.setItem('offline_active_email', hybridResult.user.email.toLowerCase().trim())
           ]);
           
           setUser(hybridResult.user);
@@ -297,7 +319,7 @@ console.log('🔐 Iniciando processo de login para:', username);
             console.log('✅ Login offline bem-sucedido, configurando dados do usuário...');
             const userData: CloudUser = {
               id: 0, // ID temporário para login offline
-              name: offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
+              name: offlineResult.credentials.name || offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
               email: offlineResult.credentials.email,
               level: 'Licencee' // Padrão para login offline
             };
@@ -308,7 +330,8 @@ console.log('🔐 Iniciando processo de login para:', username);
               await Promise.all([
                 AsyncStorage.setItem('userData', JSON.stringify(userData)),
                 AsyncStorage.setItem('hybrid_user', JSON.stringify(userData)),
-                AsyncStorage.setItem('offline_mode', 'true')
+                AsyncStorage.setItem('offline_mode', 'true'),
+                AsyncStorage.setItem('offline_active_email', userData.email.toLowerCase().trim())
               ]);
               console.log('💾 Dados do usuário salvos no AsyncStorage para login offline');
             } catch (storageError) {
@@ -338,7 +361,7 @@ console.log('🔐 Iniciando processo de login para:', username);
           console.log('✅ Login offline bem-sucedido (segundo caso), configurando dados do usuário...');
           const userData: CloudUser = {
             id: 0, // ID temporário para login offline
-            name: offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
+            name: offlineResult.credentials.name || offlineResult.credentials.email.split('@')[0] || offlineResult.credentials.email,
             email: offlineResult.credentials.email,
             level: 'Licencee' // Padrão para login offline
           };
@@ -349,7 +372,8 @@ console.log('🔐 Iniciando processo de login para:', username);
             await Promise.all([
               AsyncStorage.setItem('userData', JSON.stringify(userData)),
               AsyncStorage.setItem('hybrid_user', JSON.stringify(userData)),
-              AsyncStorage.setItem('offline_mode', 'true')
+              AsyncStorage.setItem('offline_mode', 'true'),
+              AsyncStorage.setItem('offline_active_email', userData.email.toLowerCase().trim())
             ]);
             console.log('💾 Dados do usuário salvos no AsyncStorage para login offline (segundo caso)');
           } catch (storageError) {
@@ -377,9 +401,13 @@ console.log('🔐 Iniciando processo de login para:', username);
   const logout = async () => {
     try {
       setIsLoading(true);
-console.log('🚪 Fazendo logout...');
+      console.log('🚪 Fazendo logout...');
+      
+      // Limpar dados de sessão, mas MANTER credenciais salvas para login offline
       await clearAuthData();
-      await localAuthService.clearCredentials(); // Limpar credenciais SQLite no logout explícito
+      
+      // NÃO limpar credenciais do SQLite - elas devem permanecer para login offline
+      // await localAuthService.clearCredentials(); // REMOVIDO - credenciais devem permanecer
       
       // Limpar também a flag de modo offline
       try {
@@ -390,7 +418,7 @@ console.log('🚪 Fazendo logout...');
       
       setUser(null);
       setIsAuthenticated(false);
-console.log('✅ Logout concluído');
+      console.log('✅ Logout concluído (credenciais mantidas para login offline)');
     } catch (error) {
       console.error('❌ Erro no logout:', error);
     } finally {

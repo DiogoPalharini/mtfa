@@ -68,10 +68,10 @@ class SyncService {
   }
 
   // Salvar carregamento (local + tentar sincronizar se online)
-  async saveTruckLoad(formData: TruckLoadFormData): Promise<{ success: boolean; message: string; synced: boolean }> {
+  async saveTruckLoad(formData: TruckLoadFormData, userEmail: string): Promise<{ success: boolean; message: string; synced: boolean }> {
     try {
       // Sempre salvar localmente primeiro
-      const localResult = await localDatabaseService.saveTruckLoad(formData);
+      const localResult = await localDatabaseService.saveTruckLoad(formData, userEmail);
       
       if (!localResult.success) {
         return {
@@ -83,10 +83,10 @@ class SyncService {
 
       // Se estiver online, tentar sincronizar imediatamente
       if (this.isOnline) {
-        const syncResult = await this.syncSingleLoad(localResult.id);
+        const syncResult = await this.syncSingleLoad(localResult.id, userEmail);
         
         if (syncResult.success) {
-          await localDatabaseService.markAsSynced(localResult.id);
+          await localDatabaseService.markAsSynced(localResult.id, userEmail);
           return {
             success: true,
             message: await this.getMessage('loadSavedAndSynced'),
@@ -117,9 +117,9 @@ class SyncService {
   }
 
   // Sincronizar um carregamento específico
-  private async syncSingleLoad(id: string): Promise<{ success: boolean; message: string }> {
+  private async syncSingleLoad(id: string, userEmail: string): Promise<{ success: boolean; message: string }> {
     try {
-      const loads = await localDatabaseService.getAllTruckLoads();
+      const loads = await localDatabaseService.getAllTruckLoads(userEmail);
       const load = loads.find(l => l.id === id);
       
       if (!load) {
@@ -162,7 +162,7 @@ class SyncService {
   }
 
   // Sincronizar todos os carregamentos pendentes
-  async syncAllPendingLoads(): Promise<SyncResult> {
+  async syncAllPendingLoads(userEmail: string): Promise<SyncResult> {
     if (this.isSyncing) {
       return {
         success: false,
@@ -188,7 +188,7 @@ class SyncService {
       }
 
       // Buscar carregamentos pendentes
-      const pendingLoads = await localDatabaseService.getPendingTruckLoads();
+      const pendingLoads = await localDatabaseService.getPendingTruckLoads(userEmail);
       
       if (pendingLoads.length === 0) {
         return {
@@ -206,10 +206,10 @@ class SyncService {
       // Sincronizar cada carregamento
       for (const load of pendingLoads) {
         try {
-          const result = await this.syncSingleLoad(load.id);
+          const result = await this.syncSingleLoad(load.id, userEmail);
           
           if (result.success) {
-            await localDatabaseService.markAsSynced(load.id);
+            await localDatabaseService.markAsSynced(load.id, userEmail);
             synced++;
           } else {
             failed++;
@@ -249,33 +249,33 @@ class SyncService {
   }
 
   // Buscar todos os carregamentos (locais)
-  async getAllTruckLoads(): Promise<LocalTruckLoad[]> {
-    return await localDatabaseService.getAllTruckLoads();
+  async getAllTruckLoads(userEmail: string): Promise<LocalTruckLoad[]> {
+    return await localDatabaseService.getAllTruckLoads(userEmail);
   }
 
   // Buscar estatísticas
-  async getStats(): Promise<{ total: number; pending: number; synced: number }> {
-    return await localDatabaseService.getStats();
+  async getStats(userEmail: string): Promise<{ total: number; pending: number; synced: number }> {
+    return await localDatabaseService.getStats(userEmail);
   }
 
   // Salvar dados de dropdown localmente
-  async saveDropdownData(type: string, value: string): Promise<boolean> {
-    return await localDatabaseService.saveDropdownData(type, value);
+  async saveDropdownData(type: string, value: string, userEmail: string): Promise<boolean> {
+    return await localDatabaseService.saveDropdownData(type, value, userEmail);
   }
 
   // Buscar dados de dropdown
-  async getDropdownData(type: string): Promise<string[]> {
-    return await localDatabaseService.getDropdownData(type);
+  async getDropdownData(type: string, userEmail: string): Promise<string[]> {
+    return await localDatabaseService.getDropdownData(type, userEmail);
   }
 
   // Buscar todos os dados de dropdown
-  async getAllDropdownData(): Promise<Record<string, string[]>> {
-    return await localDatabaseService.getAllDropdownData();
+  async getAllDropdownData(userEmail: string): Promise<Record<string, string[]>> {
+    return await localDatabaseService.getAllDropdownData(userEmail);
   }
 
   // Deletar carregamento
-  async deleteTruckLoad(id: string): Promise<boolean> {
-    return await localDatabaseService.deleteTruckLoad(id);
+  async deleteTruckLoad(id: string, userEmail: string): Promise<boolean> {
+    return await localDatabaseService.deleteTruckLoad(id, userEmail);
   }
 
   // Limpar dados de exemplo do banco

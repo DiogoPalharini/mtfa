@@ -132,6 +132,18 @@ export default function LoadCard({ item, onPress }: Props) {
               <Text style={styles.valueText}>{item.deliveryLocation}</Text>
             </View>
           </View>
+
+        {item.notes ? (
+          <View style={styles.infoRow}>
+            <View style={styles.iconContainer}>
+              <Ionicons name="document-text-outline" size={14} color={PRIMARY} />
+            </View>
+            <View style={styles.textContainer}>
+              <Text style={styles.labelText}>{t.notes}</Text>
+              <Text style={styles.valueText}>{item.notes}</Text>
+            </View>
+          </View>
+        ) : null}
         </View>
       </TouchableOpacity>
     </Animated.View>
@@ -211,5 +223,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: TEXT,
     fontWeight: '500',
+    flexShrink: 1,
+    flexWrap: 'wrap',
   },
 });

@@ -15,6 +15,7 @@ import { createI18n } from '../i18n/create';
 
 interface AddNewItemCardProps {
   fieldType: 'truck' | 'farm' | 'field' | 'variety' | 'driver' | 'destination' | 'agreement';
+  userEmail: string;
   onItemAdded: (newItem: string) => void;
   onClose: () => void;
 }
@@ -30,7 +31,7 @@ const FIELD_TYPE_MAPPING: Record<string, string> = {
   'agreement': 'agreement'
 };
 
-export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddNewItemCardProps) {
+export default function AddNewItemCard({ fieldType, userEmail, onItemAdded, onClose }: AddNewItemCardProps) {
   const { language } = useLanguage();
   const commonT = commonI18n[language];
   const t = createI18n[language];
@@ -48,6 +49,11 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
       return;
     }
 
+    if (!userEmail) {
+      Alert.alert(commonT.error, commonT.unexpectedError);
+      return;
+    }
+
     try {
       setIsSaving(true);
       
@@ -56,7 +62,7 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
       
       
       // Salvar diretamente no banco SQLite
-      const saved = await syncService.saveDropdownData(dbType, newItemText.trim());
+      const saved = await syncService.saveDropdownData(dbType, newItemText.trim(), userEmail);
       
       if (saved) {
         
@@ -67,7 +73,7 @@ export default function AddNewItemCard({ fieldType, onItemAdded, onClose }: AddN
         setNewItemText('');
         setIsModalVisible(false);
         
-        Alert.alert(commonT.success, 'Item adicionado com sucesso!');
+        Alert.alert(commonT.success, commonT.itemAddedSuccess);
       } else {
         Alert.alert(commonT.error, commonT.addItemError);
       }

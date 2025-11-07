@@ -45,6 +45,17 @@ export default function HomeScreen() {
       truck: localLoad.truck
     });
 
+    const sanitizeOptionalText = (value?: string | null) => {
+      if (!value) {
+        return undefined;
+      }
+      const trimmed = value.trim();
+      if (!trimmed || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+        return undefined;
+      }
+      return trimmed;
+    };
+
     // Converter data de YYYY-MM-DD para DD/MM/YYYY
     const formatDateForDisplay = (dateString: string): string => {
       if (!dateString || dateString === 'undefined' || dateString === 'null') {
@@ -120,7 +131,7 @@ export default function HomeScreen() {
       otherdestination: localLoad.otherdestination || undefined,
       agreement: localLoad.otheragreement || localLoad.agreement,
       otheragreement: localLoad.otheragreement || undefined,
-      notes: localLoad.dnote || undefined,
+      notes: sanitizeOptionalText(localLoad.dnote),
       status: (localLoad.status === 'synced' ? 'sincronizado' : 'pendente') as 'pendente' | 'sincronizado',
       created_at: localLoad.created_at,
       synced_at: localLoad.synced_at
@@ -140,15 +151,24 @@ export default function HomeScreen() {
   const syncText = useMemo(() => (pending === 0 ? t.allSynced : `${pending} ${t.pending}`), [pending, t]);
 
   // Carregar dados do banco local
-  const loadTruckLoads = async () => {
+  const loadTruckLoads = async (targetEmail?: string) => {
     try {
       setIsLoading(true);
-      const localLoads = await syncService.getAllTruckLoads();
+      const email = targetEmail ?? user?.email;
+
+      if (!email) {
+        console.error('❌ Usuário sem email ao carregar carregamentos');
+        setTruckLoads([]);
+        setPending(0);
+        return;
+      }
+
+      const localLoads = await syncService.getAllTruckLoads(email);
       const convertedLoads = localLoads.map(convertToLoadItem);
       setTruckLoads(convertedLoads);
       
       // Atualizar contador de pendentes
-      const stats = await syncService.getStats();
+      const stats = await syncService.getStats(email);
       setPending(stats.pending);
     } catch (error) {
       // Erro ao carregar carregamentos
@@ -159,8 +179,10 @@ export default function HomeScreen() {
 
   // Carregar dados quando a tela é montada
   useEffect(() => {
-    loadTruckLoads();
-  }, []);
+    if (user?.email) {
+      loadTruckLoads(user.email);
+    }
+  }, [user?.email]);
 
   // Detectar sincronização automática
   useEffect(() => {
@@ -173,7 +195,9 @@ export default function HomeScreen() {
           console.log('🔄 Sincronização automática detectada');
           // Recarregar dados após um tempo para mostrar o resultado
           setTimeout(() => {
-            loadTruckLoads();
+            if (user?.email) {
+              loadTruckLoads(user.email);
+            }
           }, 2000);
         }
       } catch (error) {
@@ -222,7 +246,13 @@ export default function HomeScreen() {
     
     setIsSyncing(true);
     try {
-      const result = await syncService.syncAllPendingLoads();
+      if (!user?.email) {
+        console.error('❌ Usuário sem email ao tentar sincronizar');
+        Alert.alert(commonT.error, commonT.unexpectedError);
+        return;
+      }
+
+      const result = await syncService.syncAllPendingLoads(user.email);
       
       console.log(`🔍 DEBUG - Resultado da sincronização:`, result);
       console.log(`🔍 DEBUG - Mensagem que será exibida: "${result.message}"`);
@@ -230,7 +260,7 @@ export default function HomeScreen() {
       if (result.success) {
         Alert.alert(commonT.success, result.message);
         // Recarregar dados após sincronização
-        await loadTruckLoads();
+        await loadTruckLoads(user.email);
       } else {
         Alert.alert(commonT.error, result.message);
       }

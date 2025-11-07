@@ -54,10 +54,10 @@ interface DropdownData {
 }
 
 // Função para carregar dados dos dropdowns do banco local
-  const fetchDropdownData = async (): Promise<DropdownData> => {
+  const fetchDropdownData = async (userEmail: string): Promise<DropdownData> => {
     try {
       // Buscar dados do banco local
-      const localData = await syncService.getAllDropdownData();
+      const localData = await syncService.getAllDropdownData(userEmail);
       
       // Garantir que todos os campos existam (mapeando tipos singulares para plurais)
       const dropdownData: DropdownData = {
@@ -178,8 +178,21 @@ export default function CreateTripScreen() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const data = await fetchDropdownData();
-        setDropdownData(data);
+        if (!user?.email) {
+          console.error('❌ Usuário sem email válido ao carregar dropdowns');
+          setDropdownData({
+            trucks: [],
+            farms: [],
+            fields: [],
+            varieties: [],
+            drivers: [],
+            destinations: [],
+            agreements: [],
+          });
+        } else {
+          const data = await fetchDropdownData(user.email);
+          setDropdownData(data);
+        }
         
         // Atualizar data e hora com valores atuais
         const currentDate = new Date();
@@ -272,14 +285,74 @@ export default function CreateTripScreen() {
     setActiveDropdown(null);
   };
 
-  // Função para converter data do formato DD/MM/AAAA para AAAA-MM-DD
+  // Função para converter data de diferentes formatos para AAAA-MM-DD
+  // Suporta: DD/MM/YYYY (português), DD.MM.YYYY (alemão), MM/DD/YYYY (inglês)
   const formatDateForBackend = (dateString: string): string => {
-    const parts = dateString.split('/');
-    if (parts.length === 3) {
-      const [day, month, year] = parts;
-      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    if (!dateString || typeof dateString !== 'string') {
+      return dateString;
     }
-    return dateString; // Fallback para o formato original se não for o esperado
+
+    let parts: string[] = [];
+    let day: string, month: string, year: string;
+
+    // Detectar separador (barra ou ponto)
+    if (dateString.includes('/')) {
+      parts = dateString.split('/');
+    } else if (dateString.includes('.')) {
+      parts = dateString.split('.');
+    } else {
+      // Se não tem separador conhecido, retornar original
+      return dateString;
+    }
+
+    if (parts.length !== 3) {
+      return dateString;
+    }
+
+    // Identificar formato baseado no idioma
+    // Alemão: DD.MM.YYYY
+    // Português: DD/MM/YYYY
+    // Inglês: MM/DD/YYYY
+    if (language === 'de') {
+      // Alemão: sempre DD.MM.YYYY
+      [day, month, year] = parts;
+    } else if (language === 'pt') {
+      // Português: sempre DD/MM/YYYY
+      [day, month, year] = parts;
+    } else {
+      // Inglês: pode ser MM/DD/YYYY, mas verificamos pelo tamanho do ano
+      // Se o primeiro valor for > 12, então é DD/MM/YYYY
+      const first = parseInt(parts[0]);
+      const second = parseInt(parts[1]);
+      
+      if (first > 12 && second <= 12) {
+        // Formato DD/MM/YYYY
+        [day, month, year] = parts;
+      } else if (first <= 12 && second > 12) {
+        // Formato MM/DD/YYYY
+        [month, day, year] = parts;
+      } else {
+        // Tentar detectar pelo tamanho do terceiro elemento (ano deve ter 4 dígitos)
+        // Se ambos podem ser dia/mês, verificamos qual faz mais sentido
+        if (parts[2].length === 4) {
+          // Assumir MM/DD/YYYY para inglês por padrão
+          [month, day, year] = parts;
+        } else {
+          // Fallback: assumir DD/MM/YYYY
+          [day, month, year] = parts;
+        }
+      }
+    }
+
+    // Garantir que year tem 4 dígitos e formatar corretamente
+    if (year && year.length === 4 && month && day) {
+      const formattedMonth = month.padStart(2, '0');
+      const formattedDay = day.padStart(2, '0');
+      return `${year}-${formattedMonth}-${formattedDay}`;
+    }
+
+    // Fallback: retornar formato original se não conseguir converter
+    return dateString;
   };
 
   // Função para converter hora do formato HH:MM:SS para HH:mm:ss (garantir formato correto)
@@ -316,6 +389,13 @@ export default function CreateTripScreen() {
     try {
       setSaving(true);
       closeAllDropdowns();
+
+      const userEmail = user?.email;
+      if (!userEmail) {
+        console.error('❌ Usuário não possui email definido, impossibilitando salvar carregamento');
+        Alert.alert(commonT.error, commonT.unexpectedError);
+        return;
+      }
 
       // Verificar se dropdownData está disponível
       if (!dropdownData) {
@@ -380,7 +460,7 @@ export default function CreateTripScreen() {
       // Filtrar apenas valores válidos e salvar
       for (const item of itemsToSave) {
         if (item.value && item.value.trim()) {
-          await syncService.saveDropdownData(item.type, item.value.trim());
+          await syncService.saveDropdownData(item.type, item.value.trim(), userEmail);
         }
       }
 
@@ -428,7 +508,7 @@ export default function CreateTripScreen() {
       // 🧹 [LIMPEZA] Bloco de código redundante removido. A lógica acima já salva todos os itens necessários.
 
       // Usar o serviço de sincronização para salvar localmente e tentar sincronizar
-      const result = await syncService.saveTruckLoad(truckLoadData);
+      const result = await syncService.saveTruckLoad(truckLoadData, userEmail);
 
       if (result.success) {
         Alert.alert(
@@ -539,11 +619,16 @@ export default function CreateTripScreen() {
               <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator nestedScrollEnabled keyboardShouldPersistTaps="handled">
                 <AddNewItemCard
                   fieldType={field as 'truck' | 'farm' | 'field' | 'variety' | 'driver' | 'destination' | 'agreement'}
+                  userEmail={user?.email ?? ''}
                   onItemAdded={async (newItem: string) => {
                     
                     // Recarregar dados do banco para garantir persistência
                     try {
-                      const freshData = await fetchDropdownData();
+                      if (!user?.email) {
+                        throw new Error('Usuário sem email ao adicionar item');
+                      }
+
+                      const freshData = await fetchDropdownData(user.email);
                       setDropdownData(freshData as DropdownData);
                     } catch (error) {
                       console.error('❌ Erro ao recarregar dados:', error);

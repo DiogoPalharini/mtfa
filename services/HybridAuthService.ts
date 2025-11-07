@@ -1,5 +1,6 @@
 // Serviço de Autenticação Híbrido
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { apiClient } from './apiClient';
 import { legacyApiClient } from './legacyApiClient';
 import { getTranslatedMessage, ErrorMessages } from './translations';

@@ -1,5 +1,8 @@
 import * as SQLite from 'expo-sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TruckLoadFormData } from './addTruckService';
+import { getTranslatedMessage, ErrorMessages } from './translations';
+import { LanguageCode } from '../contexts/LanguageContext';
 
 // Interface para os dados salvos localmente
 export interface LocalTruckLoad {
@@ -24,6 +27,7 @@ export interface LocalTruckLoad {
   status: 'pending' | 'synced';
   created_at: string;
   synced_at?: string;
+  user_email: string | null;
 }
 
 // Interface para dados de dropdown salvos localmente
@@ -32,12 +36,14 @@ export interface LocalDropdownData {
   type: 'truck' | 'farm' | 'field' | 'variety' | 'driver' | 'destination' | 'agreement';
   value: string;
   created_at: string;
+  user_email: string | null;
 }
 
 // Interface para credenciais de usuário salvas localmente
 export interface LocalUserCredentials {
   id: string;
   email: string;
+  name: string; // Nome do usuário
   password_hash: string; // Senha criptografada
   session_id?: string;
   last_login: string;
@@ -48,6 +54,25 @@ export interface LocalUserCredentials {
 class LocalDatabaseService {
   private db: SQLite.SQLiteDatabase | null = null;
   private isInitialized: boolean = false;
+
+  // Obter idioma atual do AsyncStorage
+  private async getCurrentLanguage(): Promise<LanguageCode> {
+    try {
+      const savedLanguage = await AsyncStorage.getItem('userLanguage');
+      if (savedLanguage && ['pt', 'en', 'de'].includes(savedLanguage)) {
+        return savedLanguage as LanguageCode;
+      }
+    } catch (error) {
+      // Silenciar erro, usar inglês como padrão
+    }
+    return 'en';
+  }
+
+  // Obter mensagem traduzida
+  private async getMessage(key: keyof ErrorMessages): Promise<string> {
+    const language = await this.getCurrentLanguage();
+    return getTranslatedMessage(key, language);
+  }
 
   constructor() {
     // Inicializar de forma assíncrona para evitar problemas no APK
@@ -132,6 +157,7 @@ class LocalDatabaseService {
           dnote TEXT,
           agreement TEXT NOT NULL,
           otheragreement TEXT,
+          user_email TEXT,
           status TEXT NOT NULL DEFAULT 'pending',
           created_at TEXT NOT NULL,
           synced_at TEXT
@@ -144,7 +170,8 @@ class LocalDatabaseService {
           id TEXT PRIMARY KEY,
           type TEXT NOT NULL,
           value TEXT NOT NULL,
-          created_at TEXT NOT NULL
+          created_at TEXT NOT NULL,
+          user_email TEXT
         );
       `);
 
@@ -153,6 +180,7 @@ class LocalDatabaseService {
         CREATE TABLE IF NOT EXISTS user_credentials (
           id TEXT PRIMARY KEY,
           email TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL,
           password_hash TEXT NOT NULL,
           session_id TEXT,
           last_login TEXT NOT NULL,
@@ -161,11 +189,49 @@ class LocalDatabaseService {
         );
       `);
 
+      // Migração: adicionar coluna name se não existir (para bancos já existentes)
+      try {
+        await this.db.execAsync(`
+          ALTER TABLE user_credentials ADD COLUMN name TEXT;
+        `);
+        console.log('✅ Coluna name adicionada à tabela user_credentials');
+      } catch (error: any) {
+        // Ignorar erro se a coluna já existir
+        if (!error?.message?.includes('duplicate column')) {
+          console.log('⚠️ Coluna name pode já existir ou erro na migração:', error?.message);
+        }
+      }
+
+      // Migração: garantir coluna user_email nos bancos existentes
+      try {
+        await this.db.execAsync(`
+          ALTER TABLE truck_loads ADD COLUMN user_email TEXT;
+        `);
+        console.log('✅ Coluna user_email adicionada à tabela truck_loads');
+      } catch (error: any) {
+        if (!error?.message?.includes('duplicate column')) {
+          console.log('⚠️ Coluna user_email pode já existir em truck_loads ou erro na migração:', error?.message);
+        }
+      }
+
+      try {
+        await this.db.execAsync(`
+          ALTER TABLE dropdown_data ADD COLUMN user_email TEXT;
+        `);
+        console.log('✅ Coluna user_email adicionada à tabela dropdown_data');
+      } catch (error: any) {
+        if (!error?.message?.includes('duplicate column')) {
+          console.log('⚠️ Coluna user_email pode já existir em dropdown_data ou erro na migração:', error?.message);
+        }
+      }
+
       // Índices para melhor performance
       await this.db.execAsync(`
         CREATE INDEX IF NOT EXISTS idx_truck_loads_status ON truck_loads(status);
         CREATE INDEX IF NOT EXISTS idx_truck_loads_created_at ON truck_loads(created_at);
+        CREATE INDEX IF NOT EXISTS idx_truck_loads_user_email ON truck_loads(user_email);
         CREATE INDEX IF NOT EXISTS idx_dropdown_data_type ON dropdown_data(type);
+        CREATE INDEX IF NOT EXISTS idx_dropdown_data_user_email ON dropdown_data(user_email);
         CREATE INDEX IF NOT EXISTS idx_user_credentials_email ON user_credentials(email);
         CREATE INDEX IF NOT EXISTS idx_user_credentials_last_login ON user_credentials(last_login);
       `);
@@ -182,8 +248,17 @@ class LocalDatabaseService {
     return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
+  private normalizeEmail(email?: string): string | null {
+    if (!email || typeof email !== 'string') {
+      return null;
+    }
+
+    const normalized = email.toLowerCase().trim();
+    return normalized || null;
+  }
+
   // Salvar carregamento localmente
-  async saveTruckLoad(formData: TruckLoadFormData): Promise<{ success: boolean; id: string; message: string }> {
+  async saveTruckLoad(formData: TruckLoadFormData, userEmail: string): Promise<{ success: boolean; id: string; message: string }> {
     try {
       await this.waitForInitialization();
       if (!this.db) {
@@ -191,13 +266,19 @@ class LocalDatabaseService {
       }
       if (!this.db) {
         console.error('❌ Banco de dados não inicializado');
-        return { success: false, id: '', message: 'Database not initialized' };
+        return { success: false, id: '', message: await this.getMessage('databaseNotInitialized') };
+      }
+
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao salvar carregamento');
+        return { success: false, id: '', message: await this.getMessage('saveLoadFailed') };
       }
 
       const id = this.generateId();
       const now = new Date().toISOString();
 
-('💾 Salvando carregamento no banco local:', { id, truck: formData.truck, farm: formData.farm });
+      console.log('💾 Salvando carregamento no banco local:', { id, truck: formData.truck, farm: formData.farm, user: normalizedEmail });
 
       await this.db.withTransactionAsync(async () => {
         await this.db!.runAsync(
@@ -205,8 +286,8 @@ class LocalDatabaseService {
           id, reg_date, reg_time, truck, othertruck, farm, otherfarm, 
           field, otherfield, variety, othervariety, driver, otherdriver,
           destination, otherdestination, dnote, agreement, otheragreement,
-          status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          user_email, status, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           formData.reg_date,
@@ -226,30 +307,31 @@ class LocalDatabaseService {
           formData.dnote,
           formData.agreement,
           formData.otheragreement,
+          normalizedEmail,
           'pending',
           now
         ]
         );
       });
 
-('✅ Carregamento salvo localmente com sucesso:', id);
+      console.log('✅ Carregamento salvo localmente com sucesso:', id);
       return {
         success: true,
         id,
-        message: 'Carregamento salvo localmente com sucesso!'
+        message: await this.getMessage('loadSavedLocally')
       };
     } catch (error) {
       console.error('❌ Erro ao salvar carregamento:', error);
       return {
         success: false,
         id: '',
-        message: 'Falha ao salvar carregamento no banco local'
+        message: await this.getMessage('saveLoadFailed')
       };
     }
   }
 
   // Buscar todos os carregamentos
-  async getAllTruckLoads(): Promise<LocalTruckLoad[]> {
+  async getAllTruckLoads(userEmail: string): Promise<LocalTruckLoad[]> {
     try {
       await this.waitForInitialization();
       
@@ -258,8 +340,15 @@ class LocalDatabaseService {
         return [];
       }
 
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao buscar carregamentos');
+        return [];
+      }
+
       const result = await this.db.getAllAsync(
-        `SELECT * FROM truck_loads ORDER BY created_at DESC`
+        `SELECT * FROM truck_loads WHERE user_email = ? ORDER BY created_at DESC`,
+        [normalizedEmail]
       ) as LocalTruckLoad[];
 
 (`📊 Carregamentos encontrados no banco local: ${result.length}`);
@@ -271,12 +360,19 @@ class LocalDatabaseService {
   }
 
   // Buscar carregamentos pendentes de sincronização
-  async getPendingTruckLoads(): Promise<LocalTruckLoad[]> {
+  async getPendingTruckLoads(userEmail: string): Promise<LocalTruckLoad[]> {
     if (!this.db) return [];
 
     try {
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao buscar pendências');
+        return [];
+      }
+
       const result = await this.db.getAllAsync(
-        `SELECT * FROM truck_loads WHERE status = 'pending' ORDER BY created_at ASC`
+        `SELECT * FROM truck_loads WHERE status = 'pending' AND user_email = ? ORDER BY created_at ASC`,
+        [normalizedEmail]
       ) as LocalTruckLoad[];
 
       return result;
@@ -287,14 +383,20 @@ class LocalDatabaseService {
   }
 
   // Marcar carregamento como sincronizado
-  async markAsSynced(id: string): Promise<boolean> {
+  async markAsSynced(id: string, userEmail: string): Promise<boolean> {
     if (!this.db) return false;
 
     try {
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao marcar sincronização');
+        return false;
+      }
+
       const now = new Date().toISOString();
       await this.db.runAsync(
-        `UPDATE truck_loads SET status = 'synced', synced_at = ? WHERE id = ?`,
-        [now, id]
+        `UPDATE truck_loads SET status = 'synced', synced_at = ? WHERE id = ? AND user_email = ?`,
+        [now, id, normalizedEmail]
       );
 
       return true;
@@ -305,7 +407,7 @@ class LocalDatabaseService {
   }
 
   // Salvar dados de dropdown localmente
-  async saveDropdownData(type: string, value: string): Promise<boolean> {
+  async saveDropdownData(type: string, value: string, userEmail: string): Promise<boolean> {
     try {
       await this.waitForInitialization();
       if (!this.db) {
@@ -317,36 +419,43 @@ class LocalDatabaseService {
         return false;
       }
 
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao salvar dropdown');
+        return false;
+      }
+
       const id = this.generateId();
       const now = new Date().toISOString();
 
-('💾 Salvando item de dropdown:', {
+      console.log('💾 Salvando item de dropdown:', {
         id,
         type,
         value,
-        timestamp: now
+        timestamp: now,
+        user: normalizedEmail
       });
 
       // Verificar se já existe
       const existing = await this.db.getFirstAsync(
-        `SELECT id FROM dropdown_data WHERE type = ? AND value = ?`,
-        [type, value]
+        `SELECT id FROM dropdown_data WHERE type = ? AND value = ? AND (user_email = ? OR user_email IS NULL)`,
+        [type, value, normalizedEmail]
       );
 
       if (existing) {
-(`📋 Item de dropdown "${value}" (${type}) já existe`);
+        console.log(`📋 Item de dropdown "${value}" (${type}) já existe`);
         return true; // Já existe
       }
 
       // Garantir consistência com uma transação
       await this.db.withTransactionAsync(async () => {
         await this.db!.runAsync(
-          `INSERT INTO dropdown_data (id, type, value, created_at) VALUES (?, ?, ?, ?)`,
-          [id, type, value, now]
+          `INSERT INTO dropdown_data (id, type, value, created_at, user_email) VALUES (?, ?, ?, ?, ?)`,
+          [id, type, value, now, normalizedEmail]
         );
       });
 
-(`✅ Item de dropdown "${value}" (${type}) salvo localmente com ID: ${id}`);
+      console.log(`✅ Item de dropdown "${value}" (${type}) salvo localmente com ID: ${id}`);
       
       // Verificar se foi salvo corretamente
       const verification = await this.db.getFirstAsync(
@@ -355,9 +464,9 @@ class LocalDatabaseService {
       );
       
       if (verification) {
-('✅ Verificação de salvamento bem-sucedida:', verification);
+        console.log('✅ Verificação de salvamento bem-sucedida:', verification);
       } else {
-('❌ Falha na verificação de salvamento');
+        console.log('❌ Falha na verificação de salvamento');
       }
       
       return true;
@@ -368,7 +477,7 @@ class LocalDatabaseService {
   }
 
   // Buscar dados de dropdown por tipo
-  async getDropdownData(type: string): Promise<string[]> {
+  async getDropdownData(type: string, userEmail: string): Promise<string[]> {
     try {
       await this.waitForInitialization();
       
@@ -377,14 +486,20 @@ class LocalDatabaseService {
         return [];
       }
 
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao buscar dropdown');
+        return [];
+      }
+
       
       const result = await this.db.getAllAsync(
-        `SELECT value FROM dropdown_data WHERE type = ? ORDER BY value ASC`,
-        [type]
+        `SELECT value FROM dropdown_data WHERE type = ? AND (user_email = ? OR user_email IS NULL) ORDER BY value ASC`,
+        [type, normalizedEmail]
       ) as { value: string }[];
 
       const values = result.map(row => row.value);
-(`📊 ${type}: ${values.length} itens encontrados`, values);
+      console.log(`📊 ${type}: ${values.length} itens encontrados`, values);
       
       return values;
     } catch (error) {
@@ -394,7 +509,7 @@ class LocalDatabaseService {
   }
 
   // Buscar todos os dados de dropdown
-  async getAllDropdownData(): Promise<Record<string, string[]>> {
+  async getAllDropdownData(userEmail: string): Promise<Record<string, string[]>> {
     try {
       await this.waitForInitialization();
       
@@ -403,14 +518,21 @@ class LocalDatabaseService {
         return {};
       }
 
-('📋 Buscando todos os dados de dropdown...');
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao buscar todos os dropdowns');
+        return {};
+      }
+
+      console.log('📋 Buscando todos os dados de dropdown...');
       
       // Primeiro, vamos ver todos os dados salvos no banco
       const allData = await this.db.getAllAsync(
-        `SELECT type, value FROM dropdown_data ORDER BY type, value ASC`
+        `SELECT type, value FROM dropdown_data WHERE user_email = ? OR user_email IS NULL ORDER BY type, value ASC`,
+        [normalizedEmail]
       ) as { type: string; value: string }[];
       
-('📋 Todos os dados encontrados no banco:', allData);
+      console.log('📋 Todos os dados encontrados no banco:', allData);
       
       const types = ['truck', 'farm', 'field', 'variety', 'driver', 'destination', 'agreement'];
       const result: Record<string, string[]> = {};
@@ -418,19 +540,19 @@ class LocalDatabaseService {
       for (const type of types) {
         
         // Buscar tanto tipo singular quanto plural para compatibilidade
-        const singularData = await this.getDropdownData(type);
-        const pluralData = await this.getDropdownData(type + 's');
+        const singularData = await this.getDropdownData(type, normalizedEmail);
+        const pluralData = await this.getDropdownData(type + 's', normalizedEmail);
         
         // Combinar dados singulares e plurais, removendo duplicatas
         const combinedData = [...new Set([...singularData, ...pluralData])];
         
         result[type] = combinedData;
-(`📊 ${type}: ${combinedData.length} itens encontrados`, combinedData);
+        console.log(`📊 ${type}: ${combinedData.length} itens encontrados`, combinedData);
       }
 
       const summary = Object.keys(result).map(k => `${k}: ${result[k].length}`).join(', ');
-('📋 Dados de dropdown carregados:', summary);
-('📋 Dados completos:', result);
+      console.log('📋 Dados de dropdown carregados:', summary);
+      console.log('📋 Dados completos:', result);
       return result;
     } catch (error) {
       console.error('❌ Erro ao buscar todos os dados de dropdown:', error);
@@ -439,11 +561,17 @@ class LocalDatabaseService {
   }
 
   // Deletar carregamento
-  async deleteTruckLoad(id: string): Promise<boolean> {
+  async deleteTruckLoad(id: string, userEmail: string): Promise<boolean> {
     if (!this.db) return false;
 
     try {
-      await this.db.runAsync(`DELETE FROM truck_loads WHERE id = ?`, [id]);
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao deletar carregamento');
+        return false;
+      }
+
+      await this.db.runAsync(`DELETE FROM truck_loads WHERE id = ? AND user_email = ?`, [id, normalizedEmail]);
       return true;
     } catch (error) {
       console.error('Erro ao deletar carregamento:', error);
@@ -452,18 +580,26 @@ class LocalDatabaseService {
   }
 
   // Limpar dados antigos (opcional - para manutenção)
-  async cleanupOldData(daysToKeep: number = 30): Promise<boolean> {
+  async cleanupOldData(daysToKeep: number = 30, userEmail?: string): Promise<boolean> {
     if (!this.db) return false;
 
     try {
+      const normalizedEmail = userEmail ? this.normalizeEmail(userEmail) : null;
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
       const cutoffISO = cutoffDate.toISOString();
 
-      await this.db.runAsync(
-        `DELETE FROM truck_loads WHERE created_at < ? AND status = 'synced'`,
-        [cutoffISO]
-      );
+      if (normalizedEmail) {
+        await this.db.runAsync(
+          `DELETE FROM truck_loads WHERE created_at < ? AND status = 'synced' AND user_email = ?`,
+          [cutoffISO, normalizedEmail]
+        );
+      } else {
+        await this.db.runAsync(
+          `DELETE FROM truck_loads WHERE created_at < ? AND status = 'synced'`,
+          [cutoffISO]
+        );
+      }
 
       return true;
     } catch (error) {
@@ -473,20 +609,29 @@ class LocalDatabaseService {
   }
 
   // Estatísticas do banco
-  async getStats(): Promise<{ total: number; pending: number; synced: number }> {
+  async getStats(userEmail: string): Promise<{ total: number; pending: number; synced: number }> {
     if (!this.db) return { total: 0, pending: 0, synced: 0 };
 
     try {
+      const normalizedEmail = this.normalizeEmail(userEmail);
+      if (!normalizedEmail) {
+        console.error('❌ Email do usuário inválido ao obter estatísticas');
+        return { total: 0, pending: 0, synced: 0 };
+      }
+
       const totalResult = await this.db.getFirstAsync(
-        `SELECT COUNT(*) as count FROM truck_loads`
+        `SELECT COUNT(*) as count FROM truck_loads WHERE user_email = ?`,
+        [normalizedEmail]
       ) as { count: number };
 
       const pendingResult = await this.db.getFirstAsync(
-        `SELECT COUNT(*) as count FROM truck_loads WHERE status = 'pending'`
+        `SELECT COUNT(*) as count FROM truck_loads WHERE status = 'pending' AND user_email = ?`,
+        [normalizedEmail]
       ) as { count: number };
 
       const syncedResult = await this.db.getFirstAsync(
-        `SELECT COUNT(*) as count FROM truck_loads WHERE status = 'synced'`
+        `SELECT COUNT(*) as count FROM truck_loads WHERE status = 'synced' AND user_email = ?`,
+        [normalizedEmail]
       ) as { count: number };
 
       return {
@@ -503,7 +648,7 @@ class LocalDatabaseService {
   // ===== MÉTODOS PARA CREDENCIAIS DE USUÁRIO =====
 
   // Salvar credenciais de usuário
-  async saveUserCredentials(email: string, passwordHash: string, sessionId?: string): Promise<boolean> {
+  async saveUserCredentials(email: string, passwordHash: string, sessionId?: string, name?: string): Promise<boolean> {
     try {
       await this.waitForInitialization();
       
@@ -512,37 +657,46 @@ class LocalDatabaseService {
         return false;
       }
 
+      // Normalizar email para lowercase para evitar problemas de case sensitivity
+      const normalizedEmail = email.toLowerCase().trim();
+      const userName = name || normalizedEmail.split('@')[0] || 'User';
+
       const id = this.generateId();
       const now = new Date().toISOString();
 
-console.log('💾 Salvando credenciais de usuário no banco local:', { email, hasSessionId: !!sessionId });
+      console.log('💾 Salvando credenciais de usuário no banco local:', { 
+        email: normalizedEmail, 
+        name: userName,
+        hasSessionId: !!sessionId 
+      });
 
-      // Verificar se já existe credencial para este email
+      // Verificar se já existe credencial para este email (case-insensitive)
       const existing = await this.db.getFirstAsync(
-        `SELECT id FROM user_credentials WHERE email = ?`,
-        [email]
+        `SELECT id FROM user_credentials WHERE LOWER(email) = ?`,
+        [normalizedEmail]
       );
 
       if (existing) {
         // Atualizar credenciais existentes
         await this.db.runAsync(
           `UPDATE user_credentials SET 
+            name = ?,
             password_hash = ?, 
             session_id = ?, 
             last_login = ?, 
             is_validated = 1 
-           WHERE email = ?`,
-          [passwordHash, sessionId, now, email]
+           WHERE LOWER(email) = ?`,
+          [userName, passwordHash, sessionId || null, now, normalizedEmail]
         );
-console.log('✅ Credenciais de usuário atualizadas:', email);
+        console.log('✅ Credenciais de usuário atualizadas:', normalizedEmail);
       } else {
         // Inserir novas credenciais
         await this.db.runAsync(
-          `INSERT INTO user_credentials (id, email, password_hash, session_id, last_login, is_validated, created_at) 
-           VALUES (?, ?, ?, ?, ?, 1, ?)`,
-          [id, email, passwordHash, sessionId, now, now]
+          `INSERT INTO user_credentials (id, email, name, password_hash, session_id, last_login, is_validated, created_at) 
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
+          [id, normalizedEmail, userName, passwordHash, sessionId || null, now, now]
         );
-console.log('✅ Credenciais de usuário salvas:', email);
+        console.log('✅ Credenciais de usuário salvas:', normalizedEmail);
       }
 
       return true;
@@ -562,15 +716,28 @@ console.log('✅ Credenciais de usuário salvas:', email);
         return null;
       }
 
+      // Normalizar email para lowercase para busca case-insensitive
+      const normalizedEmail = email.toLowerCase().trim();
+
       const result = await this.db.getFirstAsync(
-        `SELECT * FROM user_credentials WHERE email = ?`,
-        [email]
+        `SELECT 
+          id,
+          email,
+          COALESCE(name, SUBSTR(email, 1, INSTR(email, '@') - 1), 'User') as name,
+          password_hash,
+          session_id,
+          last_login,
+          is_validated,
+          created_at
+         FROM user_credentials 
+         WHERE LOWER(email) = ?`,
+        [normalizedEmail]
       ) as LocalUserCredentials | null;
 
       if (result) {
-console.log('📋 Credenciais encontradas para:', email);
+        console.log('📋 Credenciais encontradas para:', normalizedEmail);
       } else {
-console.log('❌ Nenhuma credencial encontrada para:', email);
+        console.log('❌ Nenhuma credencial encontrada para:', normalizedEmail);
       }
 
       return result;
@@ -591,13 +758,24 @@ console.log('❌ Nenhuma credencial encontrada para:', email);
       }
 
       const result = await this.db.getFirstAsync(
-        `SELECT * FROM user_credentials ORDER BY last_login DESC LIMIT 1`
+        `SELECT 
+          id,
+          email,
+          COALESCE(name, SUBSTR(email, 1, INSTR(email, '@') - 1), 'User') as name,
+          password_hash,
+          session_id,
+          last_login,
+          is_validated,
+          created_at
+         FROM user_credentials 
+         ORDER BY last_login DESC 
+         LIMIT 1`
       ) as LocalUserCredentials | null;
 
       if (result) {
-console.log('📋 Primeira credencial encontrada para:', result.email);
+        console.log('📋 Primeira credencial encontrada para:', result.email);
       } else {
-console.log('❌ Nenhuma credencial encontrada');
+        console.log('❌ Nenhuma credencial encontrada');
       }
 
       return result;
@@ -622,11 +800,42 @@ console.log('❌ Nenhuma credencial encontrada');
       ) as { count: number };
 
       const hasCredentials = result.count > 0;
-console.log('🔍 Tem credenciais salvas?', hasCredentials);
+      console.log('🔍 Tem credenciais salvas?', hasCredentials, '(total:', result.count, ')');
       return hasCredentials;
     } catch (error) {
       console.error('❌ Erro ao verificar credenciais de usuário:', error);
       return false;
+    }
+  }
+
+  // Buscar todas as credenciais (para debug)
+  async getAllUserCredentials(): Promise<LocalUserCredentials[]> {
+    try {
+      await this.waitForInitialization();
+      
+      if (!this.db) {
+        console.error('❌ Banco de dados não inicializado para getAllUserCredentials');
+        return [];
+      }
+
+      const result = await this.db.getAllAsync(
+        `SELECT 
+          id,
+          email,
+          COALESCE(name, SUBSTR(email, 1, INSTR(email, '@') - 1), 'User') as name,
+          password_hash,
+          session_id,
+          last_login,
+          is_validated,
+          created_at
+         FROM user_credentials 
+         ORDER BY last_login DESC`
+      ) as LocalUserCredentials[];
+
+      return result;
+    } catch (error) {
+      console.error('❌ Erro ao buscar todas as credenciais:', error);
+      return [];
     }
   }
 

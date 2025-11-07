@@ -1,9 +1,12 @@
 import * as Crypto from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localDatabaseService, LocalUserCredentials } from './localDatabaseService';
+import { getTranslatedMessage, ErrorMessages } from './translations';
+import { LanguageCode } from '../contexts/LanguageContext';
 
 export interface LocalUserCredentialsLegacy {
   email: string;
+  name?: string; // Nome do usuário
   password: string; // Será criptografada
   lastLogin: string;
   isValidated: boolean;
@@ -12,6 +15,25 @@ export interface LocalUserCredentialsLegacy {
 
 class LocalAuthService {
   private readonly ENCRYPTION_KEY = 'mtfa_auth_key_2024';
+
+  // Obter idioma atual do AsyncStorage
+  private async getCurrentLanguage(): Promise<LanguageCode> {
+    try {
+      const savedLanguage = await AsyncStorage.getItem('userLanguage');
+      if (savedLanguage && ['pt', 'en', 'de'].includes(savedLanguage)) {
+        return savedLanguage as LanguageCode;
+      }
+    } catch (error) {
+      // Silenciar erro, usar inglês como padrão
+    }
+    return 'en';
+  }
+
+  // Obter mensagem traduzida
+  private async getMessage(key: keyof ErrorMessages): Promise<string> {
+    const language = await this.getCurrentLanguage();
+    return getTranslatedMessage(key, language);
+  }
 
   // Criptografar senha
   private async encryptPassword(password: string): Promise<string> {
@@ -44,23 +66,51 @@ class LocalAuthService {
   }
 
   // Salvar credenciais após login online bem-sucedido
-  async saveCredentials(email: string, password: string, sessionId?: string): Promise<boolean> {
+  async saveCredentials(email: string, password: string, sessionId?: string, name?: string): Promise<boolean> {
     try {
+      // Normalizar email para lowercase
+      const normalizedEmail = email.toLowerCase().trim();
       const hashedPassword = await this.encryptPassword(password);
+      const userName = name || normalizedEmail.split('@')[0] || 'User';
+      
+      console.log('💾 Salvando credenciais:', { email: normalizedEmail, name: userName });
+      
       // Persistir no SQLite
-      const success = await localDatabaseService.saveUserCredentials(email, hashedPassword, sessionId);
+      const success = await localDatabaseService.saveUserCredentials(normalizedEmail, hashedPassword, sessionId, userName);
+      
       // Persistência redundante no AsyncStorage (fallback para APK)
       try {
         await AsyncStorage.setItem(
           'offline_credentials',
-          JSON.stringify({ email, password_hash: hashedPassword, session_id: sessionId, last_login: new Date().toISOString(), is_validated: true })
+          JSON.stringify({ 
+            email: normalizedEmail, 
+            name: userName,
+            password_hash: hashedPassword, 
+            session_id: sessionId, 
+            last_login: new Date().toISOString(), 
+            is_validated: true 
+          })
         );
-      } catch {}
+      } catch (storageError) {
+        console.error('⚠️ Erro ao salvar no AsyncStorage (não crítico):', storageError);
+      }
 
       if (success) {
-        console.log('✅ Credenciais salvas com sucesso para:', email);
+        console.log('✅ Credenciais salvas com sucesso para:', normalizedEmail);
+        
+        // Verificar se foi realmente salvo (para garantir)
+        try {
+          const verify = await localDatabaseService.getUserCredentials(normalizedEmail);
+          if (verify) {
+            console.log('✅ Verificação: Credenciais confirmadas no banco de dados');
+          } else {
+            console.warn('⚠️ AVISO: Credenciais não foram encontradas após salvamento!');
+          }
+        } catch (verifyError) {
+          console.error('⚠️ Erro ao verificar credenciais após salvamento:', verifyError);
+        }
       } else {
-        console.log('❌ Falha ao salvar credenciais para:', email);
+        console.log('❌ Falha ao salvar credenciais para:', normalizedEmail);
       }
       
       return success;
@@ -96,9 +146,10 @@ class LocalAuthService {
       // Converter para o formato legado esperado pelo código existente
       const legacyCredentials: LocalUserCredentialsLegacy = {
         email: credentials.email,
+        name: credentials.name,
         password: credentials.password_hash,
         lastLogin: credentials.last_login,
-        isValidated: credentials.is_validated === 1,
+        isValidated: Boolean(credentials.is_validated),
         sessionId: credentials.session_id
       };
 
@@ -126,9 +177,10 @@ console.log('📋 Nenhuma credencial encontrada');
       // Converter para o formato legado esperado pelo código existente
       const legacyCredentials: LocalUserCredentialsLegacy = {
         email: credentials.email,
+        name: credentials.name,
         password: credentials.password_hash,
         lastLogin: credentials.last_login,
-        isValidated: credentials.is_validated === 1,
+        isValidated: Boolean(credentials.is_validated),
         sessionId: credentials.session_id
       };
 
@@ -147,7 +199,9 @@ console.log('📋 Credenciais obtidas para:', legacyCredentials.email);
     credentials?: LocalUserCredentialsLegacy;
   }> {
     try {
-      console.log('🔍 Tentando login offline para:', email);
+      // Normalizar email para lowercase
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log('🔍 Tentando login offline para:', normalizedEmail);
       
       // Verificar se o banco de dados está disponível
       try {
@@ -156,40 +210,62 @@ console.log('📋 Credenciais obtidas para:', legacyCredentials.email);
         console.error('❌ Banco de dados não disponível para login offline:', dbError);
         return {
           success: false,
-          message: 'Sistema offline temporariamente indisponível. Tente novamente.'
+          message: await this.getMessage('offlineSystemUnavailable')
         };
       }
       
-      let storedCredentials = await this.getStoredCredentialsByEmail(email);
+      let storedCredentials = await this.getStoredCredentialsByEmail(normalizedEmail);
       
-      // Fallback: tentar obter do AsyncStorage se banco falhar/no data
+      // Fallback 1: tentar obter do AsyncStorage se banco falhar/no data
       if (!storedCredentials) {
         try {
           const json = await AsyncStorage.getItem('offline_credentials');
           if (json) {
             const parsed = JSON.parse(json);
-            if (parsed?.email === email) {
+            const parsedEmail = parsed?.email?.toLowerCase().trim();
+            if (parsedEmail === normalizedEmail) {
               storedCredentials = {
                 email: parsed.email,
+                name: parsed.name,
                 password: parsed.password_hash,
                 lastLogin: parsed.last_login ?? new Date().toISOString(),
                 isValidated: parsed.is_validated ?? true,
                 sessionId: parsed.session_id,
               };
+              console.log('📋 Credenciais encontradas no AsyncStorage para:', normalizedEmail);
             }
           }
-        } catch {}
+        } catch (storageError) {
+          console.error('⚠️ Erro ao ler AsyncStorage:', storageError);
+        }
       }
       
       if (!storedCredentials) {
-console.log('❌ Nenhuma credencial salva encontrada para:', email);
+        console.log('❌ Nenhuma credencial salva encontrada para:', normalizedEmail);
+        // Log adicional para debug
+        try {
+          const hasAnyCredentials = await this.hasStoredCredentials();
+          console.log('🔍 Há alguma credencial salva no banco?', hasAnyCredentials);
+          
+          // Tentar listar todas as credenciais para debug
+          if (hasAnyCredentials) {
+            try {
+              const allCredentials = await localDatabaseService.getAllUserCredentials();
+              if (allCredentials && allCredentials.length > 0) {
+                console.log('📋 Todas as credenciais no banco:', allCredentials.map(c => ({ email: c.email, name: c.name })));
+              }
+            } catch {}
+          }
+        } catch (debugError) {
+          console.error('⚠️ Erro no debug:', debugError);
+        }
         return {
           success: false,
-          message: 'Nenhuma credencial salva encontrada. Faça login online primeiro.'
+          message: await this.getMessage('noSavedCredentials')
         };
       }
 
-console.log('📋 Credenciais encontradas para:', storedCredentials.email);
+      console.log('📋 Credenciais encontradas para:', storedCredentials.email);
 
       // Verificar se as credenciais ainda são válidas (último login há menos de 30 dias)
       const lastLogin = new Date(storedCredentials.lastLogin);
@@ -202,7 +278,7 @@ console.log('📅 Dias desde último login:', daysDiff);
 console.log('❌ Credenciais expiradas');
         return {
           success: false,
-          message: 'Credenciais expiradas. Faça login online novamente.'
+          message: await this.getMessage('credentialsExpired')
         };
       }
 
@@ -213,43 +289,54 @@ console.log('❌ Credenciais expiradas');
 console.log('❌ Senha incorreta');
         return {
           success: false,
-          message: 'Senha incorreta.'
+          message: await this.getMessage('incorrectPassword')
         };
       }
 
 console.log('✅ Login offline bem-sucedido');
       return {
         success: true,
-        message: 'Login offline realizado com sucesso.',
+        message: await this.getMessage('offlineLoginSuccess'),
         credentials: storedCredentials
       };
     } catch (error) {
       console.error('❌ Erro na validação offline:', error);
       return {
         success: false,
-        message: 'Falha na validação offline. Tente novamente.'
+        message: await this.getMessage('offlineValidationFailed')
       };
     }
   }
 
   // Atualizar senha quando login online detecta mudança
-  async updatePassword(email: string, newPassword: string, sessionId?: string): Promise<boolean> {
+  async updatePassword(email: string, newPassword: string, sessionId?: string, name?: string): Promise<boolean> {
     try {
-console.log('🔄 Atualizando senha para:', email);
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log('🔄 Atualizando senha para:', normalizedEmail);
       const hashedNewPassword = await this.encryptPassword(newPassword);
       
-      const success = await localDatabaseService.saveUserCredentials(email, hashedNewPassword, sessionId);
+      const success = await localDatabaseService.saveUserCredentials(normalizedEmail, hashedNewPassword, sessionId, name);
       try {
+        const userName = name || normalizedEmail.split('@')[0] || 'User';
         await AsyncStorage.setItem(
           'offline_credentials',
-          JSON.stringify({ email, password_hash: hashedNewPassword, session_id: sessionId, last_login: new Date().toISOString(), is_validated: true })
+          JSON.stringify({ 
+            email: normalizedEmail, 
+            name: userName,
+            password_hash: hashedNewPassword, 
+            session_id: sessionId, 
+            last_login: new Date().toISOString(), 
+            is_validated: true 
+          })
         );
-      } catch {}
+      } catch (storageError) {
+        console.error('⚠️ Erro ao atualizar AsyncStorage (não crítico):', storageError);
+      }
       
       if (success) {
-console.log('✅ Senha atualizada para:', email);
+        console.log('✅ Senha atualizada para:', normalizedEmail);
       } else {
-console.log('❌ Falha ao atualizar senha para:', email);
+        console.log('❌ Falha ao atualizar senha para:', normalizedEmail);
       }
       
       return success;
@@ -324,3 +411,4 @@ console.log('❌ Falha ao remover credenciais do SQLite');
 }
 
 export const localAuthService = new LocalAuthService();
+

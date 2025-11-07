@@ -21,6 +21,8 @@ export default function LoadDetailsModal({ visible, item, onClose }: Props) {
   const t = commonI18n[language];
   if (!item) return null;
 
+  const noteValue = item.notes?.trim();
+
   const Row = ({ label, value, icon }: { label: string; value: string; icon: keyof typeof Ionicons.glyphMap }) => (
     <View style={styles.row}>
       <Ionicons name={icon} size={18} color={TEXT_SECONDARY} />
@@ -96,12 +98,8 @@ export default function LoadDetailsModal({ visible, item, onClose }: Props) {
             )}
             
             {/* Notas */}
-            {item.notes && (
-              <>
-                <Text style={styles.sectionTitle}>{t.observations}</Text>
-                <Row label={t.notes} value={item.notes} icon="chatbubble-outline" />
-              </>
-            )}
+            <Text style={styles.sectionTitle}>{t.observations}</Text>
+            <Row label={t.notes} value={noteValue || t.notAvailable} icon="document-text-outline" />
             
             {/* Informações de Sincronização */}
             <Text style={styles.sectionTitle}>{t.synchronization}</Text>
@@ -152,6 +150,7 @@ const styles = StyleSheet.create({
     color: TEXT,
     fontSize: 16,
     marginTop: 2,
+    flexWrap: 'wrap',
   },
   sectionTitle: {
     color: TEXT,

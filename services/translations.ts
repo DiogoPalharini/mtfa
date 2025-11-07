@@ -24,6 +24,15 @@ interface ErrorMessages {
   // Storage errors
   storageError: string;
   credentialsNotSaved: string;
+  databaseNotInitialized: string;
+  
+  // Offline login errors
+  offlineSystemUnavailable: string;
+  noSavedCredentials: string;
+  credentialsExpired: string;
+  incorrectPassword: string;
+  offlineValidationFailed: string;
+  offlineLoginSuccess: string;
   
   // Success messages
   loginSuccess: string;
@@ -68,6 +77,14 @@ const translations: Record<LanguageCode, ErrorMessages> = {
     // Storage errors
     storageError: 'Erro ao salvar dados',
     credentialsNotSaved: 'Credenciais não foram salvas',
+    databaseNotInitialized: 'Banco de dados não inicializado',
+    
+    // Offline login errors
+    offlineSystemUnavailable: 'Sistema offline temporariamente indisponível. Tente novamente.',
+    noSavedCredentials: 'Nenhuma credencial salva encontrada. Faça login online primeiro.',
+    credentialsExpired: 'Credenciais expiradas. Faça login online novamente.',
+    incorrectPassword: 'Senha incorreta.',
+    offlineValidationFailed: 'Falha na validação offline. Tente novamente.',
     
     // Success messages
     loginSuccess: 'Login realizado com sucesso!',
@@ -86,6 +103,9 @@ const translations: Record<LanguageCode, ErrorMessages> = {
     syncSuccessMessage: 'carregamento(s) sincronizado(s) com sucesso',
     syncNoLoadsMessage: 'Nenhum carregamento foi sincronizado.',
     syncFailedCount: 'falharam',
+    
+    // Offline login success
+    offlineLoginSuccess: 'Login offline realizado com sucesso.',
   },
   
   en: {
@@ -110,6 +130,14 @@ const translations: Record<LanguageCode, ErrorMessages> = {
     // Storage errors
     storageError: 'Error saving data',
     credentialsNotSaved: 'Credentials not saved',
+    databaseNotInitialized: 'Database not initialized',
+    
+    // Offline login errors
+    offlineSystemUnavailable: 'Offline system temporarily unavailable. Please try again.',
+    noSavedCredentials: 'No saved credentials found. Please login online first.',
+    credentialsExpired: 'Credentials expired. Please login online again.',
+    incorrectPassword: 'Incorrect password.',
+    offlineValidationFailed: 'Offline validation failed. Please try again.',
     
     // Success messages
     loginSuccess: 'Login successful!',
@@ -128,6 +156,9 @@ const translations: Record<LanguageCode, ErrorMessages> = {
     syncSuccessMessage: 'load(s) synced successfully',
     syncNoLoadsMessage: 'No loads were synced.',
     syncFailedCount: 'failed',
+    
+    // Offline login success
+    offlineLoginSuccess: 'Offline login successful.',
   },
   
   de: {
@@ -152,6 +183,14 @@ const translations: Record<LanguageCode, ErrorMessages> = {
     // Storage errors
     storageError: 'Fehler beim Speichern der Daten',
     credentialsNotSaved: 'Anmeldedaten nicht gespeichert',
+    databaseNotInitialized: 'Datenbank nicht initialisiert',
+    
+    // Offline login errors
+    offlineSystemUnavailable: 'Offline-System vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut.',
+    noSavedCredentials: 'Keine gespeicherten Anmeldedaten gefunden. Bitte melden Sie sich zuerst online an.',
+    credentialsExpired: 'Anmeldedaten abgelaufen. Bitte melden Sie sich erneut online an.',
+    incorrectPassword: 'Falsches Passwort.',
+    offlineValidationFailed: 'Offline-Validierung fehlgeschlagen. Bitte versuchen Sie es erneut.',
     
     // Success messages
     loginSuccess: 'Anmeldung erfolgreich!',
@@ -170,6 +209,9 @@ const translations: Record<LanguageCode, ErrorMessages> = {
     syncSuccessMessage: 'Ladung(en) erfolgreich synchronisiert',
     syncNoLoadsMessage: 'Keine Ladungen wurden synchronisiert.',
     syncFailedCount: 'fehlgeschlagen',
+    
+    // Offline login success
+    offlineLoginSuccess: 'Offline-Anmeldung erfolgreich.',
   },
 };
 
