@@ -139,7 +139,7 @@ export default function LoadCard({ item, onPress }: Props) {
               <Ionicons name="document-text-outline" size={14} color={PRIMARY} />
             </View>
             <View style={styles.textContainer}>
-              <Text style={styles.labelText}>{t.notes}</Text>
+              <Text style={styles.labelText}>Nota Fiscal</Text>
               <Text style={styles.valueText}>{item.notes}</Text>
             </View>
           </View>

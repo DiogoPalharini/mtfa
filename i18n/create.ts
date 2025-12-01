@@ -42,6 +42,7 @@ export const createI18n: Record<LanguageCode, Record<string, string>> = {
     adicionar: 'Adicionar',
     salvando: 'Salvando...',
     carregando: 'Carregando...',
+    clear: 'Limpar',
   },
   en: {
     date: 'Date',
@@ -84,6 +85,7 @@ export const createI18n: Record<LanguageCode, Record<string, string>> = {
     adicionar: 'Add',
     salvando: 'Saving...',
     carregando: 'Loading...',
+    clear: 'Clear',
   },
   de: {
     date: 'Datum',
@@ -126,5 +128,6 @@ export const createI18n: Record<LanguageCode, Record<string, string>> = {
     adicionar: 'Hinzufügen',
     salvando: 'Speichern...',
     carregando: 'Laden...',
+    clear: 'Löschen',
   },
 };

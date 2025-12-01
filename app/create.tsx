@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, Animated, Dimensions, Modal, Alert, KeyboardAvoidingView, BackHandler } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Localization from 'expo-localization';
 import AppHeader from '../components/AppHeader';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AddNewItemCard from '../components/AddNewItemCard';
@@ -94,9 +95,27 @@ export default function CreateTripScreen() {
   const commonT = commonI18n[language];
   
   const now = useMemo(() => new Date(), []);
+  
+  // Detectar locale do dispositivo para formatação correta de data/hora
+  const deviceLocale = useMemo(() => {
+    try {
+      // Tentar obter o locale do dispositivo usando getLocales()
+      const locales = Localization.getLocales();
+      if (locales && locales.length > 0) {
+        // Retornar locale completo (ex: 'de-CH', 'pt-BR')
+        const locale = locales[0];
+        return locale.languageTag || locale.languageCode || 'en-US';
+      }
+    } catch {
+      // Fallback baseado no idioma selecionado
+    }
+    // Fallback baseado no idioma selecionado
+    return language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-CH' : 'en-US';
+  }, [language]);
+
   const [formData, setFormData] = useState<FormData>({
-    reg_date: now.toLocaleDateString(language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-DE' : 'en-US'),
-    reg_time: now.toLocaleTimeString(language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    reg_date: now.toLocaleDateString(deviceLocale),
+    reg_time: now.toLocaleTimeString(deviceLocale, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     truck: '',
     othertruck: '',
     farm: '',
@@ -194,12 +213,22 @@ export default function CreateTripScreen() {
           setDropdownData(data);
         }
         
-        // Atualizar data e hora com valores atuais
+        // Atualizar data e hora com valores atuais usando o locale do dispositivo
         const currentDate = new Date();
+        let currentLocale = 'en-US';
+        try {
+          const locales = Localization.getLocales();
+          if (locales && locales.length > 0) {
+            currentLocale = locales[0].languageTag || locales[0].languageCode || currentLocale;
+          }
+        } catch {
+          // Fallback baseado no idioma selecionado
+          currentLocale = language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-CH' : 'en-US';
+        }
         setFormData(prev => ({
           ...prev,
-          reg_date: currentDate.toLocaleDateString(language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-DE' : 'en-US'),
-          reg_time: currentDate.toLocaleTimeString(language === 'pt' ? 'pt-BR' : language === 'de' ? 'de-DE' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          reg_date: currentDate.toLocaleDateString(currentLocale),
+          reg_time: currentDate.toLocaleTimeString(currentLocale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         }));
       } catch (error) {
         // Erro ao carregar dados
@@ -223,21 +252,7 @@ export default function CreateTripScreen() {
     return () => backHandler.remove();
   }, []);
 
-  // ✅ [CORREÇÃO] Removido useEffect que causava foco automático
-  // useEffect(() => {
-  //     // Debug logs
-  //     console.log('🔍 useEffect triggered:', { contractJustSelected, activeDropdown, field: 'agreement' });
-  //     
-  //     // Só focar se o contrato foi selecionado E não há dropdown ativo
-  //     if (contractJustSelected && !activeDropdown) {
-  //         console.log('✅ Focando no campo notes');
-  //         const timer = setTimeout(() => {
-  //             notesInputRef.current?.focus();
-  //             setContractJustSelected(false); // Resetar o flag
-  //         }, 200);
-  //         return () => clearTimeout(timer);
-  //     }
-  // }, [contractJustSelected, activeDropdown]);
+ 
 
   const formatTwo = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
@@ -285,10 +300,16 @@ export default function CreateTripScreen() {
     setActiveDropdown(null);
   };
 
-  // Função para converter data de diferentes formatos para AAAA-MM-DD
+  // Função para converter data para formato do banco (YYYY-MM-DD)
+  // Sempre converte independente do idioma ou formato de entrada
   // Suporta: DD/MM/YYYY (português), DD.MM.YYYY (alemão), MM/DD/YYYY (inglês)
   const formatDateForBackend = (dateString: string): string => {
     if (!dateString || typeof dateString !== 'string') {
+      return dateString;
+    }
+
+    // Se já está no formato YYYY-MM-DD, retornar como está
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
       return dateString;
     }
 
@@ -300,6 +321,13 @@ export default function CreateTripScreen() {
       parts = dateString.split('/');
     } else if (dateString.includes('.')) {
       parts = dateString.split('.');
+    } else if (dateString.includes('-')) {
+      // Pode ser DD-MM-YYYY, verificar
+      parts = dateString.split('-');
+      if (parts[0].length === 4) {
+        // Já é YYYY-MM-DD
+        return dateString;
+      }
     } else {
       // Se não tem separador conhecido, retornar original
       return dateString;
@@ -344,7 +372,7 @@ export default function CreateTripScreen() {
       }
     }
 
-    // Garantir que year tem 4 dígitos e formatar corretamente
+    // Garantir que year tem 4 dígitos e formatar corretamente para YYYY-MM-DD
     if (year && year.length === 4 && month && day) {
       const formattedMonth = month.padStart(2, '0');
       const formattedDay = day.padStart(2, '0');
@@ -355,10 +383,38 @@ export default function CreateTripScreen() {
     return dateString;
   };
 
-  // Função para converter hora do formato HH:MM:SS para HH:mm:ss (garantir formato correto)
+  // Função para converter hora para formato do banco (HH:mm:ss)
+  // Sempre garante formato HH:mm:ss independente do formato de entrada
   const formatTimeForBackend = (timeString: string): string => {
-    // Remove espaços e garante formato HH:mm:ss
-    return timeString.replace(/\s/g, '');
+    if (!timeString || typeof timeString !== 'string') {
+      return timeString;
+    }
+
+    // Remove espaços
+    let cleaned = timeString.replace(/\s/g, '');
+
+    // Se já está no formato HH:mm:ss, retornar como está
+    if (/^\d{2}:\d{2}:\d{2}$/.test(cleaned)) {
+      return cleaned;
+    }
+
+    // Se está no formato HH:mm, adicionar :00
+    if (/^\d{2}:\d{2}$/.test(cleaned)) {
+      return `${cleaned}:00`;
+    }
+
+    // Se está no formato HHmmss (sem separadores), adicionar separadores
+    if (/^\d{6}$/.test(cleaned)) {
+      return `${cleaned.substring(0, 2)}:${cleaned.substring(2, 4)}:${cleaned.substring(4, 6)}`;
+    }
+
+    // Se está no formato HHmm (sem separadores), adicionar separadores e segundos
+    if (/^\d{4}$/.test(cleaned)) {
+      return `${cleaned.substring(0, 2)}:${cleaned.substring(2, 4)}:00`;
+    }
+
+    // Fallback: retornar original
+    return cleaned;
   };
 
   // Função para processar campos dropdown com lógica "other"
@@ -577,35 +633,53 @@ export default function CreateTripScreen() {
       setActiveDropdown(isActive ? null : field);
     };
 
+    const handleClear = () => {
+      setFormData(prev => ({ ...prev, [field]: '' }));
+      // Limpar também o campo "other" correspondente
+      const otherField = `other${field}` as keyof FormData;
+      setFormData(prev => ({ ...prev, [otherField]: '' }));
+    };
+
     return (
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>{label}</Text>
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <TouchableOpacity
-            style={[styles.dropdownButton, isActive && styles.dropdownButtonActive]}
-            onPress={onPressIn}
-            activeOpacity={0.8}
-          >
-            <View style={styles.dropdownContent}>
-              <Ionicons name={icon} size={20} color={TEXT_SECONDARY} />
-              <Text style={[styles.dropdownText, !value && styles.placeholderText]}>
-                {value || (field === 'truck' ? t.selectTruck :
-                  field === 'farm' ? t.selectFarm :
-                  field === 'field' ? t.selectField :
-                  field === 'variety' ? t.selectVariety :
-                  field === 'driver' ? t.selectDriver :
-                  field === 'destination' ? t.selectDestination :
-                  field === 'agreement' ? t.selectContract :
-                  `Selecione ${label.toLowerCase()}`)}
-              </Text>
-            </View>
-            <Ionicons
-              name={isActive ? 'chevron-up' : 'chevron-down'}
-              size={20}
-              color={TEXT_SECONDARY}
-            />
-          </TouchableOpacity>
-        </Animated.View>
+        <View style={styles.dropdownWrapper}>
+          <Animated.View style={{ transform: [{ scale }], flex: 1 }}>
+            <TouchableOpacity
+              style={[styles.dropdownButton, isActive && styles.dropdownButtonActive]}
+              onPress={onPressIn}
+              activeOpacity={0.8}
+            >
+              <View style={styles.dropdownContent}>
+                <Ionicons name={icon} size={20} color={TEXT_SECONDARY} />
+                <Text style={[styles.dropdownText, !value && styles.placeholderText]}>
+                  {value || (field === 'truck' ? t.selectTruck :
+                    field === 'farm' ? t.selectFarm :
+                    field === 'field' ? t.selectField :
+                    field === 'variety' ? t.selectVariety :
+                    field === 'driver' ? t.selectDriver :
+                    field === 'destination' ? t.selectDestination :
+                    field === 'agreement' ? t.selectContract :
+                    `Selecione ${label.toLowerCase()}`)}
+                </Text>
+              </View>
+              <Ionicons
+                name={isActive ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={TEXT_SECONDARY}
+              />
+            </TouchableOpacity>
+          </Animated.View>
+          {value && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={handleClear}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close-circle" size={24} color={TEXT_SECONDARY} />
+            </TouchableOpacity>
+          )}
+        </View>
         
         {isActive && (
           <View style={styles.dropdownOverlay}>
@@ -617,6 +691,18 @@ export default function CreateTripScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {/* Opção para limpar o campo */}
+                <TouchableOpacity
+                  style={[styles.dropdownOption, styles.clearOption]}
+                  onPress={() => {
+                    handleClear();
+                    setActiveDropdown(null);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle-outline" size={20} color={TEXT_SECONDARY} />
+                  <Text style={[styles.dropdownOptionText, styles.clearOptionText]}>{t.clear}</Text>
+                </TouchableOpacity>
                 <AddNewItemCard
                   fieldType={field as 'truck' | 'farm' | 'field' | 'variety' | 'driver' | 'destination' | 'agreement'}
                   userEmail={user?.email ?? ''}
@@ -938,6 +1024,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
   },
+  dropdownWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   dropdownButton: {
     backgroundColor: SURFACE,
     borderRadius: 12,
@@ -948,6 +1039,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E0E0E0',
     ...CARD_SHADOW,
+    flex: 1,
+  },
+  clearButton: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   dropdownButtonActive: {
     borderColor: PRIMARY,
@@ -1002,6 +1099,16 @@ const styles = StyleSheet.create({
   dropdownOptionText: {
     color: TEXT,
     fontSize: 16,
+  },
+  clearOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFF5F5',
+  },
+  clearOptionText: {
+    color: '#DC3545',
+    fontWeight: '600',
   },
   dateTimeInput: {
     backgroundColor: SURFACE,

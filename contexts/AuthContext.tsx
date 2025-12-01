@@ -71,6 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(currentUser);
           setIsAuthenticated(true);
           console.log('✅ Usuário autenticado via dados salvos');
+          
+          // Executar sincronização automática quando sessão é restaurada
+          setTimeout(() => {
+            performAutoSync(currentUser.email);
+          }, 2000); // Aguardar 2 segundos para garantir que o app está totalmente carregado
         }
       } else if (hasLocalCredentials) {
         // Não há usuário logado, mas há credenciais locais
@@ -91,6 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setUser(userData as CloudUser);
               setIsAuthenticated(true);
               console.log('✅ Usuário autenticado via dados salvos offline');
+              
+              // Tentar sincronização automática mesmo em modo offline (caso tenha internet agora)
+              setTimeout(() => {
+                performAutoSync(userData.email);
+              }, 2000);
             }
           } else if (offlineMode === 'true') {
             const activeOfflineEmail = await AsyncStorage.getItem('offline_active_email');
@@ -112,6 +122,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(userData);
                 setIsAuthenticated(true);
                 console.log('✅ Usuário restaurado via email ativo para modo offline');
+                
+                // Tentar sincronização automática mesmo em modo offline (caso tenha internet agora)
+                setTimeout(() => {
+                  performAutoSync(userData.email);
+                }, 2000);
               }
             }
           }
@@ -159,18 +174,29 @@ console.log('⚠️ Erro na verificação, mantendo estado atual');
     }
   };
 
-  // Função para sincronização automática após login online
-  const performAutoSync = async (): Promise<void> => {
+  // Função para sincronização automática após login online ou quando sessão é restaurada
+  const performAutoSync = async (userEmail?: string): Promise<void> => {
     try {
-      console.log('🔄 Iniciando sincronização automática após login online...');
+      const emailToUse = userEmail || user?.email;
+      console.log('🔄 Iniciando sincronização automática...');
       
       // Verificar se há itens pendentes para sincronizar
-      if (!user?.email) {
+      if (!emailToUse) {
         console.warn('⚠️ Não há email do usuário disponível para sincronização automática');
         return;
       }
 
-      const stats = await syncService.getStats(user.email);
+      // Verificar conectividade antes de sincronizar
+      const hasInternet = await checkInternetConnection();
+      if (!hasInternet) {
+        console.log('🌐 Sem internet, pulando sincronização automática');
+        return;
+      }
+
+      // Se tem internet, tentar sincronizar mesmo se estava em modo offline
+      // (o usuário pode ter internet agora)
+
+      const stats = await syncService.getStats(emailToUse);
       console.log('📊 Estatísticas de sincronização:', stats);
       
       if (stats.pending > 0) {
@@ -179,7 +205,7 @@ console.log('⚠️ Erro na verificação, mantendo estado atual');
         // Executar sincronização em background (não bloquear a UI)
         setTimeout(async () => {
           try {
-            const syncResult = await syncService.syncAllPendingLoads(user.email);
+            const syncResult = await syncService.syncAllPendingLoads(emailToUse);
             console.log('✅ Sincronização automática concluída:', syncResult);
           } catch (error) {
             console.error('❌ Erro na sincronização automática:', error);
@@ -253,6 +279,11 @@ console.log('🔐 Iniciando processo de login para:', username);
           setUser(userData);
           setIsAuthenticated(true);
           
+          // Tentar sincronização automática mesmo após login offline (caso tenha internet agora)
+          setTimeout(() => {
+            performAutoSync(userData.email);
+          }, 2000);
+          
           console.log('🎉 Login offline concluído com sucesso (sem internet)!');
           return { success: true, message: t('loginSuccess') };
         } else {
@@ -300,7 +331,7 @@ console.log('🔐 Iniciando processo de login para:', username);
           setIsAuthenticated(true);
           
           // Executar sincronização automática após login online bem-sucedido
-          await performAutoSync();
+          performAutoSync(hybridResult.user.email);
           
           console.log('🎉 Login híbrido concluído com sucesso!');
           return { success: true, message: t('loginSuccess') };
@@ -341,6 +372,11 @@ console.log('🔐 Iniciando processo de login para:', username);
             
             setUser(userData);
             setIsAuthenticated(true);
+            
+            // Tentar sincronização automática mesmo após login offline (caso tenha internet agora)
+            setTimeout(() => {
+              performAutoSync(userData.email);
+            }, 2000);
             
             console.log('🎉 Login offline concluído com sucesso!');
             return { success: true, message: t('loginSuccess') };
@@ -383,6 +419,11 @@ console.log('🔐 Iniciando processo de login para:', username);
           
           setUser(userData);
           setIsAuthenticated(true);
+          
+          // Tentar sincronização automática mesmo após login offline (caso tenha internet agora)
+          setTimeout(() => {
+            performAutoSync(userData.email);
+          }, 2000);
           
           console.log('🎉 Login offline concluído com sucesso (segundo caso)!');
           return { success: true, message: t('loginSuccess') };

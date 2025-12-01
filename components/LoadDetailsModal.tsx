@@ -231,11 +231,11 @@ export default function LoadDetailsModal({ visible, item, onClose }: Props) {
 
   sections.push({
     key: 'observations',
-    title: t.observations,
+    title: 'Nota Fiscal', // Sempre em português, nunca traduzir
     data: [
       {
         key: 'observations-note',
-        label: t.notes,
+        label: 'Nota Fiscal', // Sempre em português, nunca traduzir
         value: noteValue || t.notAvailable,
         icon: 'document-text-outline',
       },
